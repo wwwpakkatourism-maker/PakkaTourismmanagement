@@ -1,0 +1,16 @@
+{
+  "name": "pakka-tourism-crm",
+  "version": "1.0.0",
+  "description": "Pakka Tourism Enterprise CRM + HRMS — MERN Stack",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "build": "cd frontend && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

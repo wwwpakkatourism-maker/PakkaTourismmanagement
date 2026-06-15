@@ -1,0 +1,101 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import useAuthStore from './store/useAuthStore';
+
+// Layout
+import AppShell from './components/layout/AppShell';
+
+// Pages
+import LoginPage from './pages/auth/LoginPage';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import EmployeeDashboard from './pages/employee/EmployeeDashboard';
+import AttendancePage from './pages/attendance/AttendancePage';
+import LeadPipeline from './pages/crm/LeadPipeline';
+import QuoteBuilder from './pages/quotes/QuoteBuilder';
+import TariffMatrix from './pages/pricing/TariffMatrix';
+import PricingEngine from './pages/pricing/PricingEngine';
+import VendorManagement from './pages/vendors/VendorManagement';
+import FinancialLedger from './pages/finance/FinancialLedger';
+import BookingManagement from './pages/bookings/BookingManagement';
+import ItineraryBuilder from './pages/itinerary/ItineraryBuilder';
+import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
+import WhatsappAutomation from './pages/whatsapp/WhatsappAutomation';
+import ExcelExport from './pages/exports/ExcelExport';
+import SettingsPage from './pages/settings/SettingsPage';
+
+// Protected Route Wrapper
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+  const { isAuthenticated, user } = useAuthStore();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (adminOnly && user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
+export default function App() {
+  const { isAuthenticated, user } = useAuthStore();
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
+        <Route path="/login" element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
+        } />
+
+        {/* Protected App Shell */}
+        <Route path="/" element={
+          <ProtectedRoute><AppShell /></ProtectedRoute>
+        }>
+          {/* Default redirect */}
+          <Route index element={<Navigate to="/dashboard" replace />} />
+
+          {/* Dashboards — role-aware */}
+          <Route path="dashboard" element={
+            user?.role === 'admin'
+              ? <AdminDashboard />
+              : <EmployeeDashboard />
+          } />
+          <Route path="admin" element={
+            <ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>
+          } />
+
+          {/* HRMS */}
+          <Route path="attendance"   element={<AttendancePage />} />
+
+          {/* CRM */}
+          <Route path="leads"        element={<LeadPipeline />} />
+          <Route path="quotes"       element={<QuoteBuilder />} />
+          <Route path="bookings"     element={<BookingManagement />} />
+          <Route path="itinerary"    element={<ItineraryBuilder />} />
+
+          {/* Pricing */}
+          <Route path="matrix"       element={<TariffMatrix />} />
+          <Route path="pricing"      element={
+            <ProtectedRoute adminOnly><PricingEngine /></ProtectedRoute>
+          } />
+
+          {/* Operations */}
+          <Route path="vendors"      element={<VendorManagement />} />
+          <Route path="finance"      element={
+            <ProtectedRoute adminOnly><FinancialLedger /></ProtectedRoute>
+          } />
+
+          {/* Intelligence */}
+          <Route path="analytics"    element={
+            <ProtectedRoute adminOnly><AnalyticsDashboard /></ProtectedRoute>
+          } />
+          <Route path="whatsapp"     element={<WhatsappAutomation />} />
+          <Route path="exports"      element={<ExcelExport />} />
+          <Route path="settings"     element={
+            <ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>
+          } />
+        </Route>
+
+        {/* 404 */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
