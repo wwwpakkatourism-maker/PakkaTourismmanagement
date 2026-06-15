@@ -93,14 +93,12 @@ function LeadCard({ lead, onClick, isDragging = false }) {
   return (
     <div
       ref={setNodeRef}
-      style={style}
       {...attributes}
       {...listeners}
       className="kanban-card"
       style={{
         ...style,
         cursor: isDragging ? 'grabbing' : 'grab',
-        borderLeft: lead.highPriority ? '3px solid #DC2626' : `3px solid ${pb.dot}`,
         background: lead.highPriority
           ? 'linear-gradient(to right, rgba(220,38,38,0.04), var(--color-bg-elevated))'
           : 'var(--color-bg-elevated)',
@@ -762,7 +760,7 @@ export default function LeadPipeline() {
         <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>⚡ Smart Sort:</span>
         <span>🔥 <strong style={{ color: '#DC2626' }}>Hot</strong> = 6+ pax traveling within 10 days</span>
         <span>↑ High priority weight · ↑ Near travel date · ↑ Large group</span>
-        <span style={{ marginLeft: 'auto', color: 'var(--color-accent)', fontWeight: 600' }}>Drag cards to update stage →</span>
+        <span style={{ marginLeft: 'auto', color: 'var(--color-accent)', fontWeight: 600 }}>Drag cards to update stage →</span>
       </div>
 
       {/* Kanban Board */}
