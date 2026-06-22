@@ -46,7 +46,7 @@ export default function FaceCapture({ mode = 'register', storedDescriptor, onSuc
       setLoadingModels(false);
     }).catch(err => {
       setLoadingModels(false);
-      setStatusMsg('Failed to load face recognition models. Please refresh.');
+      setStatusMsg('Failed to load models: ' + (err.message || 'Unknown error. Please restart dev server.'));
       setStatusType('error');
     });
   }, []);

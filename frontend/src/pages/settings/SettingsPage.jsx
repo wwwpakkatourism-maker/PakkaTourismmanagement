@@ -597,8 +597,8 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="table-card">
-            <table className="ds-table">
+          <div className="table-card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table className="ds-table" style={{ minWidth: '800px' }}>
               <thead><tr>
                 <th>Employee</th><th>ID</th><th>Department</th><th>Destination</th>
                 <th>Face ID</th><th>Status</th><th>Last Login</th><th>Actions</th>

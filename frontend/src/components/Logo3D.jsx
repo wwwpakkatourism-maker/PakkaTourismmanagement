@@ -30,7 +30,17 @@ export default function Logo3D({ logoUrl, size = 44, pause = true }) {
     animationPlayState: pause && hovered ? 'paused' : 'running',
   };
 
-  if (logoUrl) {
+  const getFullLogoUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('data:')) return url;
+    // Prepend backend URL if it's an uploaded file
+    const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+    return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const finalLogoUrl = getFullLogoUrl(logoUrl);
+
+  if (finalLogoUrl) {
     return (
       <div
         style={containerStyle}
@@ -48,7 +58,7 @@ export default function Logo3D({ logoUrl, size = 44, pause = true }) {
             border: '1.5px solid rgba(96,165,250,0.5)',
             transform: `translateZ(${s * 0.1}px)`,
           }}>
-            <img src={logoUrl} alt="Company Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff', padding: '4px' }} />
+            <img src={finalLogoUrl} alt="Company Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff', padding: '4px' }} />
           </div>
           {/* Back face glow */}
           <div style={{
