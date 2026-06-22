@@ -124,7 +124,7 @@ export default function AdminDashboard() {
 
       {/* Attendance Quick Bar */}
       {attendance && attendance.totalEmployees > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px', marginBottom: '16px' }}>
+      <div className="attendance-quick-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px', marginBottom: '16px' }}>
           {[
             { label: "Today's Present", value: attendance.present || 0, color: '#059669', bg: '#ECFDF5', icon: '✅' },
             { label: 'Absent', value: attendance.absent || 0, color: '#DC2626', bg: '#FEF2F2', icon: '❌' },
@@ -200,12 +200,16 @@ export default function AdminDashboard() {
             </div>
           ) : (
             <>
-              <PieChart width={200} height={150} style={{ margin: '0 auto' }}>
-                <Pie data={sourcePieData} cx={95} cy={70} innerRadius={40} outerRadius={68} dataKey="value" stroke="none">
-                  {sourcePieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-                <Tooltip formatter={(v, n, p) => [v, p.payload.name]} contentStyle={{ borderRadius: 10, fontSize: 12 }} />
-              </PieChart>
+              <div style={{ width: '100%', height: 150 }}>
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie data={sourcePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" stroke="none">
+                      {sourcePieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n, p) => [v, p.payload.name]} contentStyle={{ borderRadius: 10, fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {sourcePieData.slice(0, 5).map(s => {
                   const total = sourcePieData.reduce((a, b) => a + b.value, 0);

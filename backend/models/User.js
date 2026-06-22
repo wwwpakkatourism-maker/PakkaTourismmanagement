@@ -21,6 +21,28 @@ const UserSchema = new mongoose.Schema({
   workMode:        { type: String, enum: ['office', 'wfh'], default: 'office' },
   lastLogin:       { type: Date },
 
+  // Profile photo & documents
+  profilePhoto:    { type: String },                          // URL to uploaded photo
+  documents: [{
+    type:       { type: String, enum: ['aadhaar', 'pan', 'certificate', 'other'] },
+    name:       { type: String },
+    url:        { type: String },
+    uploadedAt: { type: Date, default: Date.now }
+  }],
+
+  // Additional profile details
+  dateOfBirth:      { type: Date },
+  address:          { type: String },
+  emergencyContact: { type: String },
+  bloodGroup:       { type: String, enum: ['A+','A-','B+','B-','AB+','AB-','O+','O-',''] },
+  joinDate:         { type: Date },
+  salary:           { type: Number },
+  bankDetails: {
+    accountNumber: { type: String },
+    ifsc:          { type: String },
+    bankName:      { type: String }
+  },
+
   // Geo-fencing
   geoLocation: {                                              // Last captured GPS
     lat:  { type: Number },

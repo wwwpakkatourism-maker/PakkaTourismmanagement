@@ -69,13 +69,13 @@
 
 /* ─── RESET ──────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;overflow-x:hidden}
 body{font-family:var(--font-sans);background:var(--color-bg-primary);
   color:var(--color-text-primary);-webkit-font-smoothing:antialiased;
-  font-size:14px;line-height:1.5}
+  font-size:14px;line-height:1.5;overflow-x:hidden;max-width:100vw}
 a{text-decoration:none;color:inherit}
 button{font-family:var(--font-sans);cursor:pointer}
-input,select,textarea{font-family:var(--font-sans)}
+input,select,textarea{font-family:var(--font-sans);max-width:100%;font-size:16px} /* 16px prevents iOS zoom */
 
 /* ─── APP SHELL ──────────────────────────────────── */
 .app-shell{display:flex;min-height:100vh}
@@ -566,4 +566,111 @@ table.ds-table{width:100%;border-collapse:collapse;font-size:13px}
   .page-content { padding: 10px; }
   .page-title { font-size: 16px; }
   .kpi-value { font-size: 20px; }
+}
+
+/* ─── MOBILE OVERFLOW PROTECTION ─────────────────── */
+/* Prevent horizontal scroll from fixed-width grids */
+.page-content { max-width: 100%; overflow-x: hidden; }
+
+/* ─── MOBILE FILTER STRIP ────────────────────────── */
+/* Filter button rows that wrap nicely on mobile */
+.filter-strip {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px; margin-bottom: 16px;
+  scrollbar-width: none;
+}
+.filter-strip::-webkit-scrollbar { display: none; }
+.filter-strip .btn { flex-shrink: 0; white-space: nowrap; }
+
+/* ─── MOBILE CARD LIST ────────────────────────────── */
+/* Stack items that use fixed side-by-side grids */
+@media (max-width: 767px) {
+  /* Prevent any direct child from overflowing viewport */
+  .page-content > * { max-width: calc(100vw - 20px); }
+
+  /* Two-column grids → single column below 480 */
+  [style*="grid-template-columns: 1fr 360px"],
+  [style*="gridTemplateColumns: '1fr 360px'"] {
+    display: block !important;
+  }
+
+  /* Employee dashboard two-col fix */
+  .emp-layout { display: flex !important; flex-direction: column !important; }
+
+  /* Make KPI 4-col → 2×2 */
+  .kpi-4-col { grid-template-columns: 1fr 1fr !important; }
+
+  /* Responsive inline grids that are hard-coded */
+  [style*="repeat(4,1fr)"] { grid-template-columns: 1fr 1fr !important; }
+
+  /* Table: enable horizontal scroll; prevent body overflow */
+  .table-card { overflow: hidden; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+  table.ds-table { min-width: 580px; } /* allow table to be wide, but container scrolls */
+
+  /* Modal footer: stack buttons */
+  .modal-footer { flex-wrap: wrap; }
+  .modal-footer .btn { flex: 1; min-width: 0; justify-content: center; }
+
+  /* Topbar: compact */
+  .topbar-left gap { gap: 8px; }
+
+  /* Filter buttons: horizontal scroll strip */
+  .booking-filters, .finance-filters { flex-wrap: nowrap !important; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
+  .booking-filters::-webkit-scrollbar, .finance-filters::-webkit-scrollbar { display: none; }
+
+  /* Inline grids in pages: stack them */
+  .inline-grid-2 { grid-template-columns: 1fr !important; }
+
+  /* Charts: full width, no overflow */
+  .recharts-wrapper, .recharts-surface { max-width: 100% !important; overflow: visible; }
+
+  /* Notification panel: full width mobile fix */
+  [style*="width: min(340px"] { width: calc(100vw - 24px) !important; right: -4px !important; }
+
+  /* Attendance quick bar: 2-col grid */
+  .attendance-quick-bar { grid-template-columns: 1fr 1fr !important; }
+
+  /* Form grid on mobile → 1 col */
+  .form-grid { grid-template-columns: 1fr !important; }
+
+  /* Toast: full width on mobile */
+  .toast-container { left: 12px; right: 12px; top: 8px; }
+  .toast { min-width: unset; max-width: unset; width: 100%; }
+
+  /* Safe area bottom padding for notch phones */
+  .app-main { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* Sidebar: safe area inset */
+  .app-sidebar { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* Kanban: touch friendly */
+  .kanban-board { gap: 10px; }
+  .kanban-col { min-width: 240px; }
+}
+
+/* ─── TOUCH-FRIENDLY TAP TARGETS ─────────────────── */
+@media (max-width: 767px) {
+  .sidebar-item { min-height: 44px; }
+  .btn { min-height: 40px; touch-action: manipulation; }
+  .btn-xs { min-height: 36px; }
+  input, select, textarea { min-height: 44px; }
+}
+
+/* ─── MOBILE SCROLL IMPROVEMENTS ─────────────────── */
+@media (max-width: 767px) {
+  /* Smooth momentum scrolling everywhere */
+  .app-main, .modal-body, .table-wrap, .kanban-board, .sidebar-nav {
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Page content smooth scroll */
+  .app-main { scroll-behavior: smooth; }
+}
+
+/* ─── BOTTOM SAFE AREA ────────────────────────────── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 767px) {
+    .page-content { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  }
 }

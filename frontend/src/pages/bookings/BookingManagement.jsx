@@ -65,10 +65,11 @@ export default function BookingManagement() {
 
       {/* Filters */}
       <div style={{ display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap', alignItems:'center' }}>
-        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', flex:1 }}>
+        <div className="booking-filters" style={{ display:'flex', gap:'6px', flexWrap:'wrap', flex:1 }}>
           {['all','confirmed','in_progress','completed','cancelled'].map(s => (
             <button key={s} onClick={() => setFilter(s)}
-              className={`btn btn-sm ${filter===s?'btn-primary':'btn-secondary'}`}>
+              className={`btn btn-sm ${filter===s?'btn-primary':'btn-secondary'}`}
+              style={{ flexShrink: 0 }}>
               {s === 'all' ? 'All' : s.replace('_',' ')}
             </button>
           ))}
@@ -140,7 +141,7 @@ export default function BookingManagement() {
             </div>
             <div className="modal-body">
               {/* Booking info grid */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'20px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'12px', marginBottom:'20px' }}>
                 {[
                   ['📍 Destination', selected.destination],
                   ['📅 Travel Date', new Date(selected.travelDate).toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})],

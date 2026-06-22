@@ -319,7 +319,7 @@ function LeadDetailDrawer({ lead, onClose, onUpdate, employees, isAdmin }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex' }} onClick={onClose}>
       <div style={{ flex: 1, background: 'rgba(0,0,0,0.45)' }} />
-      <div style={{ width: '480px', background: 'var(--color-bg-elevated)', height: '100%', overflow: 'auto', boxShadow: '-8px 0 32px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}
+      <div style={{ width: 'min(480px, 100vw)', background: 'var(--color-bg-elevated)', height: '100%', overflow: 'auto', boxShadow: '-8px 0 32px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}
         onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div style={{ padding: '20px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
@@ -738,7 +738,7 @@ export default function LeadPipeline() {
 
       {/* Analytics (Admin) */}
       {isAdmin && analytics && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', marginBottom: '12px', flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px', marginBottom: '12px', flexShrink: 0 }}>
           {[
             { label: 'Total', value: analytics.total, color: '#64748B' },
             { label: 'Assigned', value: analytics.assigned, color: '#2563EB' },

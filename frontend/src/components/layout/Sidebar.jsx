@@ -33,6 +33,7 @@ const ICONS = {
   exports:   'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4 M7 10l5 5 5-5 M12 15V3',
   settings:  'M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z',
   logout:    'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1',
+  profile:   'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2 M12 11a4 4 0 100-8 4 4 0 000 8',
 };
 
 /* ─── Navigation groups ──────────────────────────────────────────────────── */
@@ -42,6 +43,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/dashboard',  label: 'Dashboard',       icon: 'dashboard',  roles: ['all'] },
       { to: '/attendance', label: 'Attendance',       icon: 'attendance', roles: ['all'] },
+      { to: '/profile',    label: 'My Profile',      icon: 'profile',    roles: ['all'] },
     ]
   },
   {
@@ -150,7 +152,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }) {
       {/* ── Footer ────────────────────────────────────────────────── */}
       <div className="sidebar-footer">
         {/* User info */}
-        <div className="sidebar-user" onClick={() => { navigate('/settings'); onMobileClose(); }}>
+        <div className="sidebar-user" onClick={() => { navigate('/profile'); onMobileClose(); }}>
           <div
             className="sidebar-avatar"
             style={{ background: AVATAR_COLORS[user?.role] || '#3B82F6' }}

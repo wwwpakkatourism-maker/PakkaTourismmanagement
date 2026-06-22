@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -125,7 +125,7 @@ function GeoFenceTab() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '20px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', alignItems: 'start' }}>
 
         {/* ── Map Container ── */}
         <div>
@@ -385,17 +385,87 @@ function GeoFenceTab() {
 export default function SettingsPage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('employees');
-  const [employees, setEmployees] = useState(MOCK_EMPLOYEES);
+  const [employees, setEmployees] = useState([]);
+  const [empLoading, setEmpLoading] = useState(false);
   const [showAddEmployee, setShowAddEmployee] = useState(false);
   const [showEditEmployee, setShowEditEmployee] = useState(null);
   const [showFaceReg, setShowFaceReg] = useState(null);
   const [showResetPwd, setShowResetPwd] = useState(null);
   const [faceRegStage, setFaceRegStage] = useState('idle');
   const [faceRegPct, setFaceRegPct] = useState(0);
+  const [resetPwdForm, setResetPwdForm] = useState({ password: '', confirm: '' });
+  const [empMsg, setEmpMsg] = useState('');
+
+  // Load real employees on mount
+  useEffect(() => { fetchEmployees(); }, []);
+
+  const fetchEmployees = async () => {
+    setEmpLoading(true);
+    try {
+      const { data } = await api.get('/auth/users');
+      setEmployees(data.data || []);
+    } catch (err) { console.error('Failed to load employees:', err); }
+    finally { setEmpLoading(false); }
+  };
 
   const [newEmp, setNewEmp] = useState({
     name:'', email:'', phone:'', password:'', department:'Sales', destination:'Manali, HP'
   });
+
+  // Settings State
+  const [settings, setSettings] = useState({
+    companyName: '', companyPhone: '', companyEmail: '', companyAddress: '', companyWebsite: '', gstNumber: '', panNumber: '', companyLogo: '',
+    whatsapp: { apiToken: '', phoneNumberId: '', businessAccountId: '', webhookToken: '', isConfigured: false },
+    reminders: { followUpEnabled: true, followUpBeforeHrs: 2, paymentEnabled: true, paymentBeforeDays: 3, travelEnabled: true, travelBeforeDays: 2, dailyDigest: false }
+  });
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoRef = useRef(null);
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const { data } = await api.get('/settings/company');
+      if (data.data) setSettings(prev => ({ ...prev, ...data.data }));
+    } catch (err) { console.error('Failed to load settings:', err); }
+  };
+
+  const saveCompanyInfo = async () => {
+    try {
+      await api.put('/settings/company', settings);
+      alert('✅ Company info saved!');
+    } catch (err) { alert('❌ Failed to save company info'); }
+  };
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      const { data } = await api.post('/profile/company-logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSettings(s => ({ ...s, companyLogo: data.url }));
+      alert('✅ Logo uploaded successfully!');
+    } catch (err) { alert('❌ Logo upload failed'); }
+    finally { setLogoUploading(false); }
+  };
+
+  const saveWhatsapp = async () => {
+    try {
+      await api.put('/settings/whatsapp', settings.whatsapp);
+      alert('✅ WhatsApp config saved!');
+    } catch (err) { alert('❌ Failed to save WhatsApp config'); }
+  };
+
+  const saveReminders = async () => {
+    try {
+      await api.put('/settings/reminders', settings.reminders);
+      alert('✅ Reminder settings saved!');
+    } catch (err) { alert('❌ Failed to save reminder settings'); }
+  };
 
   const TABS = [
     { id: 'employees',    label: '👥 Employee Management' },
@@ -428,18 +498,44 @@ export default function SettingsPage() {
     setFaceRegStage('idle');
   };
 
-  const toggleActive = (id) => {
-    setEmployees(prev => prev.map(e => e._id === id ? { ...e, isActive: !e.isActive } : e));
+  const toggleActive = async (id, currentStatus) => {
+    try {
+      await api.put(`/auth/users/${id}/toggle-status`, { isActive: !currentStatus });
+      fetchEmployees();
+    } catch (err) {
+      setEmployees(prev => prev.map(e => e._id === id ? { ...e, isActive: !e.isActive } : e));
+    }
   };
 
-  const handleAddEmployee = () => {
-    const id = `EMP-${String(employees.length + 1).padStart(3, '0')}`;
-    setEmployees(prev => [...prev, {
-      _id: id, ...newEmp, role: 'employee', faceRegistered: false, isActive: true,
-      joinDate: new Date().toISOString().slice(0, 10), lastLogin: '—'
-    }]);
-    setNewEmp({ name:'', email:'', phone:'', password:'', department:'Sales', destination:'Manali, HP' });
-    setShowAddEmployee(false);
+  const handleAddEmployee = async () => {
+    try {
+      await api.post('/auth/register', { ...newEmp, role: 'employee' });
+      setNewEmp({ name:'', email:'', phone:'', password:'', department:'Sales', destination:'Manali, HP' });
+      setShowAddEmployee(false);
+      setEmpMsg('✅ Employee created successfully!');
+      setTimeout(() => setEmpMsg(''), 3000);
+      fetchEmployees();
+    } catch (err) {
+      setEmpMsg(`❌ ${err.response?.data?.message || 'Failed to create employee'}`);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (resetPwdForm.password !== resetPwdForm.confirm) {
+      setEmpMsg('❌ Passwords do not match'); return;
+    }
+    if (resetPwdForm.password.length < 6) {
+      setEmpMsg('❌ Password must be at least 6 characters'); return;
+    }
+    try {
+      await api.put(`/auth/users/${showResetPwd._id}/reset-password`, { newPassword: resetPwdForm.password });
+      setShowResetPwd(null);
+      setResetPwdForm({ password: '', confirm: '' });
+      setEmpMsg('✅ Password reset successfully!');
+      setTimeout(() => setEmpMsg(''), 3000);
+    } catch (err) {
+      setEmpMsg(`❌ ${err.response?.data?.message || 'Reset failed'}`);
+    }
   };
 
   return (
@@ -467,7 +563,7 @@ export default function SettingsPage() {
       {/* ══════ EMPLOYEE MANAGEMENT ══════ */}
       {activeTab === 'employees' && (
         <div>
-          <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: '16px' }}>
+          <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', marginBottom: '16px' }}>
             {[
               { label: 'Total Employees', value: employees.length, icon: '👥' },
               { label: 'Active',   value: employees.filter(e => e.isActive).length,   icon: '✅' },
@@ -482,11 +578,22 @@ export default function SettingsPage() {
             ))}
           </div>
 
+          {empMsg && (
+            <div style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '12px', fontSize: '12px',
+              background: empMsg.startsWith('✅') ? 'rgba(16,185,129,0.1)' : 'rgba(220,38,38,0.1)',
+              color: empMsg.startsWith('✅') ? '#059669' : '#DC2626',
+              border: `1px solid ${empMsg.startsWith('✅') ? 'rgba(16,185,129,0.3)' : 'rgba(220,38,38,0.3)'}`
+            }}>{empMsg}</div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
-              {employees.length} employees registered · Only Admin can create employee accounts
+              {empLoading ? 'Loading…' : `${employees.length} employees registered · Only Admin can create employee accounts`}
             </div>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddEmployee(true)}>+ Add Employee</button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-ghost btn-sm" onClick={fetchEmployees}>↻ Refresh</button>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowAddEmployee(true)}>+ Add Employee</button>
+            </div>
           </div>
 
           <div className="table-card">
@@ -531,10 +638,11 @@ export default function SettingsPage() {
                     <td style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>{emp.lastLogin}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="btn btn-ghost btn-xs" title="View Profile" onClick={() => window.location.href = `/profile/${emp._id}`}>👤</button>
                         <button className="btn btn-ghost btn-xs" title="Edit" onClick={() => setShowEditEmployee(emp)}>✏️</button>
-                        <button className="btn btn-ghost btn-xs" title="Reset Password" onClick={() => setShowResetPwd(emp)}>🔑</button>
+                        <button className="btn btn-ghost btn-xs" title="Reset Password" onClick={() => { setShowResetPwd(emp); setResetPwdForm({ password: '', confirm: '' }); }}>🔑</button>
                         <button className="btn btn-ghost btn-xs" title="Register Face" onClick={() => startFaceReg(emp._id)}>📸</button>
-                        <button className="btn btn-ghost btn-xs" title={emp.isActive ? 'Disable' : 'Enable'} onClick={() => toggleActive(emp._id)}
+                        <button className="btn btn-ghost btn-xs" title={emp.isActive ? 'Disable' : 'Enable'} onClick={() => toggleActive(emp._id, emp.isActive)}
                           style={{ color: emp.isActive ? 'var(--color-danger)' : 'var(--color-success)' }}>
                           {emp.isActive ? '⏸' : '▶'}
                         </button>
@@ -714,11 +822,11 @@ export default function SettingsPage() {
                   </div>
                   <div className="form-group" style={{ marginBottom: '12px' }}>
                     <label className="form-label">New Password *</label>
-                    <input className="form-input" type="password" placeholder="Enter new password" />
+                    <input className="form-input" type="password" placeholder="Enter new password" value={resetPwdForm.password} onChange={e => setResetPwdForm(f => ({...f, password: e.target.value}))} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Confirm Password *</label>
-                    <input className="form-input" type="password" placeholder="Confirm new password" />
+                    <input className="form-input" type="password" placeholder="Confirm new password" value={resetPwdForm.confirm} onChange={e => setResetPwdForm(f => ({...f, confirm: e.target.value}))} />
                   </div>
                 </div>
                 <div className="modal-footer">
@@ -737,36 +845,78 @@ export default function SettingsPage() {
           <div className="card" style={{ marginBottom: '16px' }}>
             <div className="card-title">Application Settings</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="form-group"><label className="form-label">Company Name</label><input className="form-input" defaultValue="Pakka Tourism" /></div>
               <div className="form-group"><label className="form-label">Default Currency</label><select className="form-select"><option>INR (₹)</option><option>USD ($)</option></select></div>
               <div className="form-group"><label className="form-label">Fiscal Year Start</label><select className="form-select"><option>April</option><option>January</option></select></div>
               <div className="form-group"><label className="form-label">Date Format</label><select className="form-select"><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select></div>
             </div>
           </div>
+          
           <div className="card" style={{ marginBottom: '16px' }}>
-            <div className="card-title">Notification Preferences</div>
-            {[
-              { label: 'New Lead Notifications', desc: 'Alert when a new lead is created', default: true },
-              { label: 'Payment Received', desc: 'Alert on booking payment receipt', default: true },
-              { label: 'Follow-up Reminders', desc: 'Remind before scheduled follow-ups', default: true },
-              { label: 'WhatsApp Delivery Reports', desc: 'Show message read/delivery status', default: false },
-              { label: 'Daily Summary Email', desc: 'Send daily KPI digest to admins', default: false },
-            ].map((pref, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 4 ? '1px solid var(--color-border)' : 'none' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13px' }}>{pref.label}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{pref.desc}</div>
-                </div>
+            <div className="card-title">Reminder & Notification Settings</div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '13px' }}>Follow-up Reminders</div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Remind before scheduled lead follow-ups</div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <input type="number" className="form-input" style={{ width: '60px', padding: '4px' }} value={settings.reminders.followUpBeforeHrs} onChange={e => setSettings(s => ({...s, reminders: {...s.reminders, followUpBeforeHrs: parseInt(e.target.value)||0}}))} /> <span style={{fontSize:'12px'}}>hrs before</span>
                 <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
-                  <input type="checkbox" defaultChecked={pref.default} style={{ opacity: 0, width: 0, height: 0 }} />
-                  <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, borderRadius: '22px', background: pref.default ? 'var(--color-accent)' : 'var(--color-border)', transition: '0.2s' }}>
-                    <span style={{ position: 'absolute', height: '16px', width: '16px', left: pref.default ? '20px' : '3px', bottom: '3px', borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                  <input type="checkbox" checked={settings.reminders.followUpEnabled} onChange={e => setSettings(s => ({...s, reminders: {...s.reminders, followUpEnabled: e.target.checked}}))} style={{ opacity: 0, width: 0, height: 0 }} />
+                  <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, borderRadius: '22px', background: settings.reminders.followUpEnabled ? 'var(--color-accent)' : 'var(--color-border)', transition: '0.2s' }}>
+                    <span style={{ position: 'absolute', height: '16px', width: '16px', left: settings.reminders.followUpEnabled ? '20px' : '3px', bottom: '3px', borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
                   </span>
                 </label>
               </div>
-            ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '13px' }}>Payment Reminders</div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Remind clients about upcoming payments</div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <input type="number" className="form-input" style={{ width: '60px', padding: '4px' }} value={settings.reminders.paymentBeforeDays} onChange={e => setSettings(s => ({...s, reminders: {...s.reminders, paymentBeforeDays: parseInt(e.target.value)||0}}))} /> <span style={{fontSize:'12px'}}>days before</span>
+                <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                  <input type="checkbox" checked={settings.reminders.paymentEnabled} onChange={e => setSettings(s => ({...s, reminders: {...s.reminders, paymentEnabled: e.target.checked}}))} style={{ opacity: 0, width: 0, height: 0 }} />
+                  <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, borderRadius: '22px', background: settings.reminders.paymentEnabled ? 'var(--color-accent)' : 'var(--color-border)', transition: '0.2s' }}>
+                    <span style={{ position: 'absolute', height: '16px', width: '16px', left: settings.reminders.paymentEnabled ? '20px' : '3px', bottom: '3px', borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '13px' }}>Travel Date Reminders</div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Notify clients before their travel starts</div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <input type="number" className="form-input" style={{ width: '60px', padding: '4px' }} value={settings.reminders.travelBeforeDays} onChange={e => setSettings(s => ({...s, reminders: {...s.reminders, travelBeforeDays: parseInt(e.target.value)||0}}))} /> <span style={{fontSize:'12px'}}>days before</span>
+                <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                  <input type="checkbox" checked={settings.reminders.travelEnabled} onChange={e => setSettings(s => ({...s, reminders: {...s.reminders, travelEnabled: e.target.checked}}))} style={{ opacity: 0, width: 0, height: 0 }} />
+                  <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, borderRadius: '22px', background: settings.reminders.travelEnabled ? 'var(--color-accent)' : 'var(--color-border)', transition: '0.2s' }}>
+                    <span style={{ position: 'absolute', height: '16px', width: '16px', left: settings.reminders.travelEnabled ? '20px' : '3px', bottom: '3px', borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '13px' }}>Daily Digest Email</div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Send daily KPI and task digest to admins</div>
+              </div>
+              <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                <input type="checkbox" checked={settings.reminders.dailyDigest} onChange={e => setSettings(s => ({...s, reminders: {...s.reminders, dailyDigest: e.target.checked}}))} style={{ opacity: 0, width: 0, height: 0 }} />
+                <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, borderRadius: '22px', background: settings.reminders.dailyDigest ? 'var(--color-accent)' : 'var(--color-border)', transition: '0.2s' }}>
+                  <span style={{ position: 'absolute', height: '16px', width: '16px', left: settings.reminders.dailyDigest ? '20px' : '3px', bottom: '3px', borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                </span>
+              </label>
+            </div>
+            
+            <button className="btn btn-primary" style={{ marginTop: '16px' }} onClick={saveReminders}>💾 Save Reminders</button>
           </div>
-          <button className="btn btn-primary">💾 Save Settings</button>
         </div>
       )}
 
@@ -824,16 +974,36 @@ export default function SettingsPage() {
           <div className="card">
             <div className="card-title">🏢 Company Information</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="form-group"><label className="form-label">Company Name</label><input className="form-input" defaultValue="Pakka Tourism Pvt. Ltd." /></div>
-              <div className="form-group"><label className="form-label">GST Number</label><input className="form-input" defaultValue="09AABCPXXXX1ZX" /></div>
-              <div className="form-group"><label className="form-label">PAN</label><input className="form-input" defaultValue="AABCPXXXX" /></div>
-              <div className="form-group"><label className="form-label">Address</label><textarea className="form-textarea" defaultValue="Pakka Tourism Office, Mall Road, Manali, Himachal Pradesh 175131" /></div>
-              <div className="form-grid">
-                <div className="form-group"><label className="form-label">Phone</label><input className="form-input" defaultValue="+91 98765 43210" /></div>
-                <div className="form-group"><label className="form-label">Email</label><input className="form-input" defaultValue="info@pakkatourism.com" /></div>
+              
+              {/* Logo Upload */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '10px' }}>
+                <div style={{ width: '80px', height: '80px', borderRadius: '12px', background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', overflow: 'hidden', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                  {settings.companyLogo ? (
+                    <img src={`${window.location.protocol}//${window.location.hostname}:5000${settings.companyLogo}`} alt="Company Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  ) : (
+                    <span style={{ fontSize: '24px' }}>🏢</span>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Company Logo</div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Recommended: 256x256px PNG or JPEG</div>
+                  <input type="file" ref={logoRef} hidden accept="image/*" onChange={handleLogoUpload} />
+                  <button className="btn btn-secondary btn-sm" onClick={() => logoRef.current?.click()} disabled={logoUploading}>
+                    {logoUploading ? 'Uploading...' : 'Upload Logo'}
+                  </button>
+                </div>
               </div>
-              <div className="form-group"><label className="form-label">Website</label><input className="form-input" defaultValue="https://www.pakkatourism.com" /></div>
-              <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>💾 Update Company Info</button>
+
+              <div className="form-group"><label className="form-label">Company Name</label><input className="form-input" value={settings.companyName} onChange={e => setSettings(s => ({...s, companyName: e.target.value}))} /></div>
+              <div className="form-group"><label className="form-label">GST Number</label><input className="form-input" value={settings.gstNumber} onChange={e => setSettings(s => ({...s, gstNumber: e.target.value}))} /></div>
+              <div className="form-group"><label className="form-label">PAN</label><input className="form-input" value={settings.panNumber} onChange={e => setSettings(s => ({...s, panNumber: e.target.value}))} /></div>
+              <div className="form-group"><label className="form-label">Address</label><textarea className="form-textarea" value={settings.companyAddress} onChange={e => setSettings(s => ({...s, companyAddress: e.target.value}))} /></div>
+              <div className="form-grid">
+                <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={settings.companyPhone} onChange={e => setSettings(s => ({...s, companyPhone: e.target.value}))} /></div>
+                <div className="form-group"><label className="form-label">Email</label><input className="form-input" value={settings.companyEmail} onChange={e => setSettings(s => ({...s, companyEmail: e.target.value}))} /></div>
+              </div>
+              <div className="form-group"><label className="form-label">Website</label><input className="form-input" value={settings.companyWebsite} onChange={e => setSettings(s => ({...s, companyWebsite: e.target.value}))} /></div>
+              <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={saveCompanyInfo}>💾 Update Company Info</button>
             </div>
           </div>
         </div>
@@ -841,33 +1011,75 @@ export default function SettingsPage() {
 
       {/* ══════ INTEGRATIONS ══════ */}
       {activeTab === 'integrations' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '12px' }}>
-          {[
-            { name: 'WhatsApp Business API', icon: '💬', status: 'connected', desc: 'Automated messaging and templates', color: '#25D366' },
-            { name: 'MongoDB Atlas', icon: '🗄️', status: 'connected', desc: 'Cloud database hosting', color: '#10B981' },
-            { name: 'Razorpay', icon: '💳', status: 'not_connected', desc: 'Payment gateway integration', color: '#3B82F6' },
-            { name: 'Google Maps', icon: '🗺️', status: 'connected', desc: 'Geo-fencing and location services', color: '#4285F4' },
-            { name: 'Twilio', icon: '📱', status: 'not_connected', desc: 'SMS and voice notifications', color: '#F22F46' },
-            { name: 'AWS S3', icon: '☁️', status: 'not_connected', desc: 'File and document storage', color: '#FF9900' },
-          ].map(int => (
-            <div key={int.name} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: 40, height: 40, borderRadius: '12px', background: `${int.color}12`, display: 'grid', placeItems: 'center', fontSize: '20px' }}>{int.icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px' }}>{int.name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{int.desc}</div>
-                </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '640px' }}>
+          
+          <div className="card" style={{ borderLeft: '4px solid #25D366' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '12px', background: '#25D36612', display: 'grid', placeItems: 'center', fontSize: '20px' }}>💬</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '16px' }}>WhatsApp Business API</div>
+                <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Automated messaging, quotes, and itineraries</div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className={`badge ${int.status === 'connected' ? 'badge-confirmed' : 'badge-neutral'}`}>
-                  {int.status === 'connected' ? '✓ Connected' : '○ Not Connected'}
-                </span>
-                <button className={`btn btn-sm ${int.status === 'connected' ? 'btn-ghost' : 'btn-primary'}`}>
-                  {int.status === 'connected' ? 'Configure' : 'Connect'}
-                </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600 }}>Active:</span>
+                <label style={{ position: 'relative', display: 'inline-block', width: '36px', height: '20px' }}>
+                  <input type="checkbox" checked={settings.whatsapp.isConfigured} onChange={e => setSettings(s => ({...s, whatsapp: {...s.whatsapp, isConfigured: e.target.checked}}))} style={{ opacity: 0, width: 0, height: 0 }} />
+                  <span style={{ position: 'absolute', cursor: 'pointer', inset: 0, borderRadius: '22px', background: settings.whatsapp.isConfigured ? '#25D366' : 'var(--color-border)', transition: '0.2s' }}>
+                    <span style={{ position: 'absolute', height: '14px', width: '14px', left: settings.whatsapp.isConfigured ? '19px' : '3px', bottom: '3px', borderRadius: '50%', background: '#fff', transition: '0.2s' }} />
+                  </span>
+                </label>
               </div>
             </div>
-          ))}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', background: 'var(--color-bg-secondary)', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+              <div className="form-group">
+                <label className="form-label">Phone Number ID</label>
+                <input className="form-input" placeholder="e.g. 1090123456789" value={settings.whatsapp.phoneNumberId} onChange={e => setSettings(s => ({...s, whatsapp: {...s.whatsapp, phoneNumberId: e.target.value}}))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Business Account ID</label>
+                <input className="form-input" placeholder="e.g. 1090123456789" value={settings.whatsapp.businessAccountId} onChange={e => setSettings(s => ({...s, whatsapp: {...s.whatsapp, businessAccountId: e.target.value}}))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Permanent Access Token</label>
+                <input className="form-input" type="password" placeholder="EAA..." value={settings.whatsapp.apiToken} onChange={e => setSettings(s => ({...s, whatsapp: {...s.whatsapp, apiToken: e.target.value}}))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Webhook Verify Token</label>
+                <input className="form-input" placeholder="Custom token for Meta Webhooks" value={settings.whatsapp.webhookToken} onChange={e => setSettings(s => ({...s, whatsapp: {...s.whatsapp, webhookToken: e.target.value}}))} />
+              </div>
+              <button className="btn btn-primary" style={{ alignSelf: 'flex-start', background: '#25D366', borderColor: '#25D366' }} onClick={saveWhatsapp}>
+                💾 Save WhatsApp Config
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '12px' }}>
+            {[
+              { name: 'Razorpay', icon: '💳', status: 'not_connected', desc: 'Payment gateway integration', color: '#3B82F6' },
+              { name: 'Google Maps', icon: '🗺️', status: 'connected', desc: 'Geo-fencing and location services', color: '#4285F4' },
+              { name: 'AWS S3', icon: '☁️', status: 'not_connected', desc: 'File and document storage', color: '#FF9900' },
+            ].map(int => (
+              <div key={int.name} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '12px', background: `${int.color}12`, display: 'grid', placeItems: 'center', fontSize: '20px' }}>{int.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '14px' }}>{int.name}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{int.desc}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className={`badge ${int.status === 'connected' ? 'badge-confirmed' : 'badge-neutral'}`}>
+                    {int.status === 'connected' ? '✓ Connected' : '○ Not Connected'}
+                  </span>
+                  <button className={`btn btn-sm ${int.status === 'connected' ? 'btn-ghost' : 'btn-primary'}`}>
+                    {int.status === 'connected' ? 'Configure' : 'Connect'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
       )}
     </div>

@@ -56,10 +56,11 @@ export default function FinancialLedger() {
       </div>
 
       {/* Filters */}
-      <div style={{ display:'flex', gap:'8px', marginBottom:'16px' }}>
+      <div className="finance-filters" style={{ display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap', overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
         {['all','income','expense','vendor_payment','refund'].map(t => (
           <button key={t} onClick={() => setTypeFilter(t)}
-            className={`btn btn-sm ${typeFilter===t?'btn-primary':'btn-secondary'}`}>
+            className={`btn btn-sm ${typeFilter===t?'btn-primary':'btn-secondary'}`}
+            style={{ flexShrink: 0 }}>
             {t==='all'?'All':t.replace('_',' ')}
           </button>
         ))}

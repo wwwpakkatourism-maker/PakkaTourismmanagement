@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const CompanySettings = require('../models/CompanySettings');
 
 // ─── GET /api/settings/office-locations ─────────────────────────────────────
 // Returns all saved office locations from the admin's profile
@@ -66,4 +67,72 @@ const getPrimaryLocation = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getOfficeLocations, saveOfficeLocation, deleteOfficeLocation, getPrimaryLocation };
+// ─── GET /api/settings/company ──────────────────────────────────────────────
+const getCompanySettings = async (req, res, next) => {
+  try {
+    const settings = await CompanySettings.getSettings();
+    res.json({ success: true, data: settings });
+  } catch (err) { next(err); }
+};
+
+// ─── PUT /api/settings/company ──────────────────────────────────────────────
+const updateCompanySettings = async (req, res, next) => {
+  try {
+    const { companyName, companyPhone, companyEmail, companyAddress, companyWebsite, gstNumber, panNumber } = req.body;
+    let settings = await CompanySettings.getSettings();
+    
+    settings.companyName = companyName !== undefined ? companyName : settings.companyName;
+    settings.companyPhone = companyPhone !== undefined ? companyPhone : settings.companyPhone;
+    settings.companyEmail = companyEmail !== undefined ? companyEmail : settings.companyEmail;
+    settings.companyAddress = companyAddress !== undefined ? companyAddress : settings.companyAddress;
+    settings.companyWebsite = companyWebsite !== undefined ? companyWebsite : settings.companyWebsite;
+    settings.gstNumber = gstNumber !== undefined ? gstNumber : settings.gstNumber;
+    settings.panNumber = panNumber !== undefined ? panNumber : settings.panNumber;
+    
+    await settings.save();
+    res.json({ success: true, data: settings });
+  } catch (err) { next(err); }
+};
+
+// ─── PUT /api/settings/whatsapp ─────────────────────────────────────────────
+const updateWhatsappConfig = async (req, res, next) => {
+  try {
+    const { apiToken, phoneNumberId, businessAccountId, webhookToken, isConfigured } = req.body;
+    let settings = await CompanySettings.getSettings();
+    
+    if (!settings.whatsapp) settings.whatsapp = {};
+    settings.whatsapp.apiToken = apiToken !== undefined ? apiToken : settings.whatsapp.apiToken;
+    settings.whatsapp.phoneNumberId = phoneNumberId !== undefined ? phoneNumberId : settings.whatsapp.phoneNumberId;
+    settings.whatsapp.businessAccountId = businessAccountId !== undefined ? businessAccountId : settings.whatsapp.businessAccountId;
+    settings.whatsapp.webhookToken = webhookToken !== undefined ? webhookToken : settings.whatsapp.webhookToken;
+    settings.whatsapp.isConfigured = isConfigured !== undefined ? isConfigured : settings.whatsapp.isConfigured;
+    
+    await settings.save();
+    res.json({ success: true, data: settings });
+  } catch (err) { next(err); }
+};
+
+// ─── PUT /api/settings/reminders ────────────────────────────────────────────
+const updateReminders = async (req, res, next) => {
+  try {
+    const { followUpEnabled, followUpBeforeHrs, paymentEnabled, paymentBeforeDays, travelEnabled, travelBeforeDays, dailyDigest } = req.body;
+    let settings = await CompanySettings.getSettings();
+    
+    if (!settings.reminders) settings.reminders = {};
+    settings.reminders.followUpEnabled = followUpEnabled !== undefined ? followUpEnabled : settings.reminders.followUpEnabled;
+    settings.reminders.followUpBeforeHrs = followUpBeforeHrs !== undefined ? followUpBeforeHrs : settings.reminders.followUpBeforeHrs;
+    settings.reminders.paymentEnabled = paymentEnabled !== undefined ? paymentEnabled : settings.reminders.paymentEnabled;
+    settings.reminders.paymentBeforeDays = paymentBeforeDays !== undefined ? paymentBeforeDays : settings.reminders.paymentBeforeDays;
+    settings.reminders.travelEnabled = travelEnabled !== undefined ? travelEnabled : settings.reminders.travelEnabled;
+    settings.reminders.travelBeforeDays = travelBeforeDays !== undefined ? travelBeforeDays : settings.reminders.travelBeforeDays;
+    settings.reminders.dailyDigest = dailyDigest !== undefined ? dailyDigest : settings.reminders.dailyDigest;
+    
+    await settings.save();
+    res.json({ success: true, data: settings });
+  } catch (err) { next(err); }
+};
+
+module.exports = { 
+  getOfficeLocations, saveOfficeLocation, deleteOfficeLocation, getPrimaryLocation,
+  getCompanySettings, updateCompanySettings, updateWhatsappConfig, updateReminders
+};

@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import usePricingStore from '../../store/usePricingStore';
 
 export default function QuoteBuilder() {
@@ -9,6 +11,44 @@ export default function QuoteBuilder() {
   });
   const [quote, setQuote] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const quoteRef = useRef(null);
+
+  // ── PDF Export ──
+  const exportQuotePDF = async () => {
+    if (!quote) { alert('Please calculate a quote first!'); return; }
+    setExporting(true);
+    try {
+      const el = quoteRef.current;
+      if (!el) { setExporting(false); return; }
+      const canvas = await html2canvas(el, {
+        scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const imgW = pdfW - 20;
+      const imgH = (canvas.height * imgW) / canvas.width;
+      let heightLeft = imgH;
+      let pos = 10;
+      pdf.addImage(imgData, 'PNG', 10, pos, imgW, imgH);
+      heightLeft -= (pdfH - 20);
+      while (heightLeft > 0) {
+        pos = heightLeft - imgH + 10;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 10, pos, imgW, imgH);
+        heightLeft -= (pdfH - 20);
+      }
+      const filename = `Quote_${(form.clientName || 'Client').replace(/\s+/g,'_')}_${form.destination.replace(/\s+/g,'_')}.pdf`;
+      pdf.save(filename);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+      alert('❌ PDF export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const nights = form.days > 1 ? form.days - 1 : 0;
 
@@ -201,7 +241,100 @@ export default function QuoteBuilder() {
               <div style={{ display:'flex', gap:'8px', marginTop:'16px', flexWrap:'wrap' }}>
                 <button className="btn btn-success" style={{ flex:1, justifyContent:'center' }}>💾 Save Quote</button>
                 <button className="btn btn-primary" style={{ flex:1, justifyContent:'center' }}>📤 Send to Client</button>
-                <button className="btn btn-secondary">🖨️ PDF</button>
+                <button className="btn btn-secondary" onClick={exportQuotePDF} disabled={exporting}>
+                  {exporting ? '⟳ Exporting…' : '🖨️ PDF'}
+                </button>
+              </div>
+
+              {/* Hidden PDF-Ready Print Layout */}
+              <div style={{ position:'absolute', left:'-9999px', top:0 }}>
+                <div ref={quoteRef} style={{ width:'700px', padding:'40px', background:'#fff', color:'#1F2937', fontFamily:'Inter, system-ui, sans-serif' }}>
+                  {/* Header */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', paddingBottom:'20px', borderBottom:'3px solid #2563EB', marginBottom:'24px' }}>
+                    <div>
+                      <div style={{ fontSize:'26px', fontWeight:800, color:'#1E3A5F' }}>🏔️ Pakka Tourism</div>
+                      <div style={{ fontSize:'10px', color:'#64748B', letterSpacing:'0.06em', textTransform:'uppercase' }}>Your Trusted Travel Partner</div>
+                    </div>
+                    <div style={{ textAlign:'right', fontSize:'11px', color:'#6B7280' }}>
+                      <div style={{ fontWeight:700, fontSize:'16px', color:'#2563EB' }}>QUOTATION</div>
+                      <div>Date: {new Date().toLocaleDateString('en-IN')}</div>
+                    </div>
+                  </div>
+
+                  {/* Client Info */}
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'24px', gap:'20px', flexWrap:'wrap' }}>
+                    <div style={{ fontSize:'13px' }}>
+                      <div style={{ fontWeight:700, marginBottom:'4px', color:'#374151' }}>Quotation For:</div>
+                      <div style={{ fontSize:'20px', fontWeight:800, color:'#111827' }}>{form.clientName || 'Client Name'}</div>
+                      <div style={{ color:'#6B7280' }}>📞 {form.clientPhone || '—'}</div>
+                    </div>
+                    <div style={{ textAlign:'right', fontSize:'13px' }}>
+                      <div>📍 <strong>{form.destination}</strong></div>
+                      <div>{form.days}D / {nights}N · {form.pax} Pax</div>
+                      {form.travelDate && <div>🗓️ {new Date(form.travelDate).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'})}</div>}
+                    </div>
+                  </div>
+
+                  {/* Cost Breakdown Table */}
+                  <table style={{ width:'100%', borderCollapse:'collapse', marginBottom:'20px', fontSize:'13px' }}>
+                    <thead>
+                      <tr style={{ background:'#1D4ED8', color:'#fff' }}>
+                        <th style={{ padding:'10px 12px', textAlign:'left', borderRadius:'8px 0 0 0' }}>Component</th>
+                        <th style={{ padding:'10px 12px', textAlign:'center' }}>Qty</th>
+                        <th style={{ padding:'10px 12px', textAlign:'right' }}>Rate</th>
+                        <th style={{ padding:'10px 12px', textAlign:'right', borderRadius:'0 8px 0 0' }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nights > 0 && (
+                        <tr style={{ borderBottom:'1px solid #E5E7EB' }}>
+                          <td style={{ padding:'10px 12px' }}><strong>Hotel Rooms</strong><br/><span style={{fontSize:'11px',color:'#6B7280'}}>{quote.logistics.rooms} rooms × {nights} nights</span></td>
+                          <td style={{ padding:'10px 12px', textAlign:'center' }}>{quote.logistics.rooms}</td>
+                          <td style={{ padding:'10px 12px', textAlign:'right' }}>{fmt(config.room.sell)}/room/night</td>
+                          <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600 }}>{fmt(quote.logistics.roomSell)}</td>
+                        </tr>
+                      )}
+                      <tr style={{ borderBottom:'1px solid #E5E7EB' }}>
+                        <td style={{ padding:'10px 12px' }}><strong>Transport (Jeeps)</strong><br/><span style={{fontSize:'11px',color:'#6B7280'}}>{quote.logistics.jeeps} jeeps × {form.days} days</span></td>
+                        <td style={{ padding:'10px 12px', textAlign:'center' }}>{quote.logistics.jeeps}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right' }}>{fmt(config.jeep.sell)}/jeep/day</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600 }}>{fmt(quote.logistics.jeepSell)}</td>
+                      </tr>
+                      <tr style={{ borderBottom:'1px solid #E5E7EB' }}>
+                        <td style={{ padding:'10px 12px' }}><strong>Food Package</strong><br/><span style={{fontSize:'11px',color:'#6B7280'}}>{form.pax} pax × {form.days} days</span></td>
+                        <td style={{ padding:'10px 12px', textAlign:'center' }}>{form.pax}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right' }}>{fmt(config.food.sell)}/pax/day</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:600 }}>{fmt(quote.logistics.foodSell)}</td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background:'#F0F9FF' }}>
+                        <td colSpan="3" style={{ padding:'12px', fontWeight:800, fontSize:'15px' }}>TOTAL AMOUNT</td>
+                        <td style={{ padding:'12px', textAlign:'right', fontWeight:800, fontSize:'18px', color:'#2563EB' }}>{fmt(sellPrice)}</td>
+                      </tr>
+                      <tr style={{ background:'#F8FAFC' }}>
+                        <td colSpan="3" style={{ padding:'8px 12px', fontSize:'12px', color:'#6B7280' }}>Per Person</td>
+                        <td style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, fontSize:'14px' }}>{fmt(Math.round(sellPrice/form.pax))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+
+                  {/* Terms */}
+                  <div style={{ fontSize:'11px', color:'#6B7280', marginBottom:'20px', padding:'12px', background:'#F8FAFC', borderRadius:'8px', border:'1px solid #E5E7EB' }}>
+                    <div style={{ fontWeight:700, marginBottom:'6px', color:'#374151' }}>Terms & Conditions:</div>
+                    <div>• 50% advance required at time of booking confirmation</div>
+                    <div>• Balance amount due 7 days before travel date</div>
+                    <div>• Cancellation charges apply as per company policy</div>
+                    <div>• Prices valid for 7 days from date of quotation</div>
+                    <div>• GST extra as applicable</div>
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{ textAlign:'center', paddingTop:'16px', borderTop:'2px solid #2563EB', fontSize:'11px', color:'#6B7280' }}>
+                    <div style={{ fontWeight:700, color:'#1E3A5F', fontSize:'13px' }}>Pakka Tourism Pvt. Ltd.</div>
+                    <div>📍 Mall Road, Manali, HP 175131 · 📞 +91 98765 43210 · ✉️ info@pakkatourism.com</div>
+                  </div>
+                </div>
               </div>
             </>
           )}

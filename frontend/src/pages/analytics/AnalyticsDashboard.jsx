@@ -125,7 +125,7 @@ export default function AnalyticsDashboard() {
       </div>
 
       {/* Top KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(5,1fr)', marginBottom: '20px' }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: '20px' }}>
         {kpis.map(k => (
           <div key={k.label} className="kpi-card">
             <div className="kpi-label">{k.label}</div>
@@ -137,7 +137,7 @@ export default function AnalyticsDashboard() {
       </div>
 
       {/* Charts Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
         {/* Revenue Trend */}
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -166,12 +166,16 @@ export default function AnalyticsDashboard() {
           <div className="card-title">Lead Sources</div>
           {sourcePie.length === 0 ? <EmptyChart label="No leads yet" /> : (
             <>
-              <PieChart width={200} height={160} style={{ margin: '0 auto' }}>
-                <Pie data={sourcePie} cx={95} cy={75} innerRadius={40} outerRadius={72} dataKey="value" stroke="none">
-                  {sourcePie.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-                <Tooltip formatter={(v, n, p) => [`${Math.round((v / sourcePieTotal) * 100)}% (${v})`, p.payload.name]} contentStyle={{ borderRadius: 10, fontSize: 12 }} />
-              </PieChart>
+              <div style={{ width: '100%', height: 160 }}>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie data={sourcePie} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" stroke="none">
+                      {sourcePie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n, p) => [`${Math.round((v / sourcePieTotal) * 100)}% (${v})`, p.payload.name]} contentStyle={{ borderRadius: 10, fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '8px' }}>
                 {sourcePie.map(s => (
                   <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
@@ -187,7 +191,7 @@ export default function AnalyticsDashboard() {
       </div>
 
       {/* Charts Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '16px' }}>
         {/* Destination Revenue */}
         <div className="card">
           <div className="card-title">Top Destinations</div>

@@ -1,6 +1,7 @@
 const Attendance = require('../models/Attendance');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const Leave = require('../models/Leave');
 
 // Haversine distance (meters)
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -332,4 +333,127 @@ const getMonthlyStats = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { checkIn, checkOut, getMyAttendance, getDashboardStats, getAttendanceTrend, adminGetAll, markManual, getMonthlyStats };
+// ─── POST /api/attendance/leave/apply ───────────────────────────────────────
+const applyLeave = async (req, res, next) => {
+  try {
+    const { startDate, endDate, type, reason } = req.body;
+    
+    // Calculate simple days diff (inclusive)
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+    const leave = await Leave.create({
+      employeeId: req.user._id,
+      employeeName: req.user.name,
+      startDate, endDate, days, type, reason, status: 'pending'
+    });
+
+    // Notify admins
+    const admins = await User.find({ role: 'admin', isActive: true });
+    for (const admin of admins) {
+      await Notification.create({
+        recipient: admin._id,
+        type: 'leave_request',
+        title: 'New Leave Request',
+        message: `${req.user.name} applied for ${days} day(s) leave (${type}).`,
+        actionUrl: '/attendance'
+      });
+    }
+
+    res.json({ success: true, data: leave });
+  } catch (err) { next(err); }
+};
+
+// ─── GET /api/attendance/leave ──────────────────────────────────────────────
+const getLeaves = async (req, res, next) => {
+  try {
+    const filter = req.user.role === 'admin' ? {} : { employeeId: req.user._id };
+    const leaves = await Leave.find(filter).sort({ createdAt: -1 });
+    res.json({ success: true, data: leaves });
+  } catch (err) { next(err); }
+};
+
+// ─── PUT /api/attendance/leave/:id/status (admin) ───────────────────────────
+const updateLeaveStatus = async (req, res, next) => {
+  try {
+    const { status, adminNotes } = req.body;
+    const leave = await Leave.findById(req.params.id);
+    if (!leave) return res.status(404).json({ success: false, message: 'Leave not found' });
+
+    leave.status = status;
+    leave.approvedBy = req.user._id;
+    if (adminNotes) leave.adminNotes = adminNotes;
+    await leave.save();
+
+    // If approved, create Attendance records for each day
+    if (status === 'approved') {
+      const start = new Date(leave.startDate);
+      const end = new Date(leave.endDate);
+      for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0];
+        // skip weekends (0=Sun)
+        if (d.getDay() !== 0) {
+          await Attendance.findOneAndUpdate(
+            { employeeId: leave.employeeId, date: dateStr },
+            {
+              $set: {
+                employeeId: leave.employeeId, employeeName: leave.employeeName, date: dateStr,
+                attendanceStatus: 'on_leave', workMode: 'office', markedManually: true, markedBy: req.user._id,
+                notes: `Approved ${leave.type} leave: ${leave.reason}`
+              }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+        }
+      }
+    }
+
+    // Notify employee
+    await Notification.create({
+      recipient: leave.employeeId,
+      type: 'leave_update',
+      title: 'Leave Request Update',
+      message: `Your leave request for ${leave.startDate} has been ${status}.`,
+      actionUrl: '/attendance'
+    });
+
+    res.json({ success: true, data: leave });
+  } catch (err) { next(err); }
+};
+
+// ─── POST /api/attendance/auto-absent (admin/cron) ──────────────────────────
+const markAutoAbsent = async (req, res, next) => {
+  try {
+    const { date } = req.body;
+    const targetDate = date || getTodayDate();
+    
+    // Get all active employees
+    const employees = await User.find({ role: 'employee', isActive: true });
+    let markedCount = 0;
+
+    for (const emp of employees) {
+      const existing = await Attendance.findOne({ employeeId: emp._id, date: targetDate });
+      if (!existing) {
+        await Attendance.create({
+          employeeId: emp._id,
+          employeeName: emp.name,
+          date: targetDate,
+          attendanceStatus: 'absent',
+          workMode: 'office', // default
+          markedManually: true, // or system
+          notes: 'Auto-marked absent by system'
+        });
+        markedCount++;
+      }
+    }
+
+    res.json({ success: true, message: `Auto-marked ${markedCount} employees absent for ${targetDate}` });
+  } catch (err) { next(err); }
+};
+
+module.exports = { 
+  checkIn, checkOut, getMyAttendance, getDashboardStats, getAttendanceTrend, 
+  adminGetAll, markManual, getMonthlyStats,
+  applyLeave, getLeaves, updateLeaveStatus, markAutoAbsent
+};

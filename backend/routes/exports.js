@@ -1,10 +1,12 @@
-const router    = require('express').Router();
-const ExcelJS   = require('exceljs');
+const router      = require('express').Router();
+const ExcelJS     = require('exceljs');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
-const Booking   = require('../models/Booking');
-const Lead      = require('../models/Lead');
-const User      = require('../models/User');
-const Attendance = require('../models/Attendance');
+const Booking     = require('../models/Booking');
+const Lead        = require('../models/Lead');
+const User        = require('../models/User');
+const Attendance  = require('../models/Attendance');
+const Transaction = require('../models/Transaction');
+const Vendor      = require('../models/Vendor');
 
 // ─── Shared helper: send a finished ExcelJS workbook as a download response ──
 async function sendWorkbook(res, workbook, filename) {
@@ -82,7 +84,7 @@ router.get('/leads', protect, adminOnly, async (req, res, next) => {
     }
 
     const leads = await Lead.find(filter)
-      .populate('assignedTo', 'name')
+      .populate('assignedEmployee', 'name')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -113,17 +115,17 @@ router.get('/leads', protect, adminOnly, async (req, res, next) => {
     // Add data rows
     leads.forEach(l => {
       sheet.addRow({
-        client:      l.clientName,
-        phone:       l.phone,
+        client:      l.customerName,
+        phone:       l.mobileNumber,
         destination: l.destination,
-        stage:       l.stage,
+        stage:       l.leadStatus,
         priority:    l.priority,
-        pax:         l.pax,
+        pax:         l.totalPax || ((l.adults || 0) + (l.children || 0)),
         budget:      l.budget,
         source:      l.source,
         travelDate:  l.travelDate ? new Date(l.travelDate).toLocaleDateString('en-IN') : '—',
-        assignedTo:  l.assignedTo?.name || '—',
-        followUp:    l.nextFollowUp ? new Date(l.nextFollowUp).toLocaleDateString('en-IN') : '—',
+        assignedTo:  l.assignedEmployee?.name || '—',
+        followUp:    l.followUpDate ? new Date(l.followUpDate).toLocaleDateString('en-IN') : '—',
         createdAt:   new Date(l.createdAt).toLocaleDateString('en-IN'),
       });
     });
@@ -138,7 +140,7 @@ router.get('/leads', protect, adminOnly, async (req, res, next) => {
     // Summary row at the bottom
     sheet.addRow([]);
     const summaryRow = sheet.addRow([
-      `Total: ${leads.length} leads`, '', '', '', '', `${leads.reduce((s, l) => s + (l.pax || 0), 0)} pax`,
+      `Total: ${leads.length} leads`, '', '', '', '', `${leads.reduce((s, l) => s + (l.totalPax || 0), 0)} pax`,
       leads.reduce((s, l) => s + (l.budget || 0), 0)
     ]);
     summaryRow.font = { bold: true, color: { argb: 'FF1D4ED8' } };
@@ -280,34 +282,141 @@ router.get('/attendance', protect, adminOnly, async (req, res, next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/vendors', protect, adminOnly, async (req, res, next) => {
   try {
+    const vendors = await Vendor.find().sort({ name: 1 }).lean();
+
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Vendors');
+    workbook.creator = 'Pakka Tourism CRM';
+    const sheet = workbook.addWorksheet('Vendors', {
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true }
+    });
     sheet.columns = [
-      { header: 'Vendor',     key: 'name',      width: 24 },
-      { header: 'Category',   key: 'category',  width: 16 },
-      { header: 'Contact',    key: 'contact',   width: 16 },
-      { header: 'Total Paid', key: 'paid',      width: 16 },
-      { header: 'Pending',    key: 'pending',   width: 16 },
+      { header: 'Vendor Name',    key: 'name',        width: 24 },
+      { header: 'Type',           key: 'type',        width: 14 },
+      { header: 'Phone',          key: 'phone',       width: 16 },
+      { header: 'Email',          key: 'email',       width: 22 },
+      { header: 'Destination',    key: 'destination', width: 18 },
+      { header: 'GST Number',     key: 'gst',         width: 18 },
+      { header: 'Total Payable',  key: 'payable',     width: 16 },
+      { header: 'Total Paid',     key: 'paid',        width: 16 },
+      { header: 'Outstanding',    key: 'outstanding', width: 16 },
+      { header: 'Rating',         key: 'rating',      width: 10 },
+      { header: 'Status',         key: 'status',      width: 12 },
     ];
+
+    vendors.forEach(v => {
+      sheet.addRow({
+        name:        v.name,
+        type:        v.type,
+        phone:       v.phone,
+        email:       v.email || '—',
+        destination: v.destination || '—',
+        gst:         v.gstNumber || '—',
+        payable:     v.totalPayable || 0,
+        paid:        v.totalPaid || 0,
+        outstanding: v.outstandingDue || 0,
+        rating:      v.rating ? `${v.rating}/5` : '—',
+        status:      v.isActive ? 'Active' : 'Inactive',
+      });
+    });
+
     styleHeaderRow(sheet, sheet.columns.length);
+    shadeRows(sheet);
     autoFitColumns(sheet);
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // Summary
+    sheet.addRow([]);
+    const summaryRow = sheet.addRow([
+      `Total: ${vendors.length} vendors`, '', '', '', '', '',
+      vendors.reduce((s, v) => s + (v.totalPayable || 0), 0),
+      vendors.reduce((s, v) => s + (v.totalPaid || 0), 0),
+      vendors.reduce((s, v) => s + (v.outstandingDue || 0), 0),
+    ]);
+    summaryRow.font = { bold: true, color: { argb: 'FF1D4ED8' } };
+
     await sendWorkbook(res, workbook, 'PakkaTourism_Vendors.xlsx');
   } catch (err) { next(err); }
 });
 
 router.get('/revenue', protect, adminOnly, async (req, res, next) => {
   try {
+    const { from, to } = req.query;
+    const filter = {};
+    if (from || to) {
+      filter.date = {};
+      if (from) filter.date.$gte = new Date(from);
+      if (to)   filter.date.$lte = new Date(new Date(to).setHours(23, 59, 59));
+    }
+
+    const transactions = await Transaction.find(filter)
+      .populate('booking', 'bookingNumber clientName')
+      .populate('vendor', 'name')
+      .populate('createdBy', 'name')
+      .sort({ date: -1 })
+      .lean();
+
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Revenue');
+    workbook.creator = 'Pakka Tourism CRM';
+    const sheet = workbook.addWorksheet('Revenue Report', {
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true }
+    });
     sheet.columns = [
-      { header: 'Date',        key: 'date',     width: 14 },
-      { header: 'Type',        key: 'type',     width: 16 },
-      { header: 'Description', key: 'desc',     width: 28 },
-      { header: 'Amount (₹)', key: 'amount',   width: 16 },
-      { header: 'Category',    key: 'category', width: 18 },
+      { header: 'Date',           key: 'date',       width: 14 },
+      { header: 'Type',           key: 'type',       width: 16 },
+      { header: 'Category',       key: 'category',   width: 18 },
+      { header: 'Description',    key: 'desc',       width: 30 },
+      { header: 'Amount (₹)',     key: 'amount',     width: 16 },
+      { header: 'Payment Method', key: 'method',     width: 16 },
+      { header: 'Reference',      key: 'reference',  width: 18 },
+      { header: 'Booking #',      key: 'booking',    width: 16 },
+      { header: 'Vendor',         key: 'vendor',     width: 18 },
+      { header: 'Created By',     key: 'createdBy',  width: 16 },
     ];
+
+    transactions.forEach(t => {
+      const row = sheet.addRow({
+        date:      t.date ? new Date(t.date).toLocaleDateString('en-IN') : '—',
+        type:      t.type,
+        category:  t.category || '—',
+        desc:      t.description || '—',
+        amount:    t.amount,
+        method:    t.method || '—',
+        reference: t.reference || '—',
+        booking:   t.booking?.bookingNumber || '—',
+        vendor:    t.vendor?.name || '—',
+        createdBy: t.createdBy?.name || '—',
+      });
+      // Color code income green, expense red
+      const amountCell = row.getCell('amount');
+      if (t.type === 'income') {
+        amountCell.font = { bold: true, color: { argb: 'FF059669' } };
+      } else if (t.type === 'expense' || t.type === 'vendor_payment') {
+        amountCell.font = { bold: true, color: { argb: 'FFDC2626' } };
+      }
+    });
+
     styleHeaderRow(sheet, sheet.columns.length);
+    shadeRows(sheet);
     autoFitColumns(sheet);
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // Summary
+    const income  = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const expense = transactions.filter(t => t.type !== 'income').reduce((s, t) => s + t.amount, 0);
+    sheet.addRow([]);
+    const sumRow = sheet.addRow([
+      `Total: ${transactions.length} transactions`, '', '', '',
+      `Net: ₹${(income - expense).toLocaleString('en-IN')}`,
+      '', '', '', '', ''
+    ]);
+    sumRow.font = { bold: true, color: { argb: 'FF1D4ED8' } };
+    sheet.addRow([
+      '', '', '', 'Income:',  income, '', '', '', '', ''
+    ]).getCell(5).font = { bold: true, color: { argb: 'FF059669' } };
+    sheet.addRow([
+      '', '', '', 'Expense:', expense, '', '', '', '', ''
+    ]).getCell(5).font = { bold: true, color: { argb: 'FFDC2626' } };
+
     await sendWorkbook(res, workbook, 'PakkaTourism_Revenue.xlsx');
   } catch (err) { next(err); }
 });

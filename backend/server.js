@@ -61,6 +61,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
+// ─── Static file serving for uploads ──────────────────────────────────────────
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth',           require('./routes/auth'));
 app.use('/api/attendance',     require('./routes/attendance'));
@@ -76,6 +80,7 @@ app.use('/api/analytics',      require('./routes/analytics'));
 app.use('/api/whatsapp',       require('./routes/whatsapp'));
 app.use('/api/settings',       require('./routes/settings'));
 app.use('/api/exports',        require('./routes/exports'));
+app.use('/api/profile',        require('./routes/profile'));
 
 // Health check
 app.get('/api/health', (req, res) => {

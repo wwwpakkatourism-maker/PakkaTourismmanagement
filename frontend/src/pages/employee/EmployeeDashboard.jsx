@@ -113,7 +113,7 @@ export default function EmployeeDashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: '20px' }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: '20px' }}>
         {loading ? [1, 2, 3, 4].map(i => (
           <div key={i} className="kpi-card" style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>
             <div style={{ height: '12px', background: 'var(--color-bg-secondary)', borderRadius: '6px', marginBottom: '12px', width: '60%' }} />
@@ -129,7 +129,7 @@ export default function EmployeeDashboard() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '20px' }}>
+      <div className="emp-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) min(360px, 100%)', gap: '20px' }}>
 
         {/* Left: Leads */}
         <div>

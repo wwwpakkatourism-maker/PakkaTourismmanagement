@@ -58,6 +58,13 @@ export default function AttendancePage() {
   const [employees, setEmployees]       = useState([]);
   const [manualForm, setManualForm]     = useState({ employeeId: '', date: new Date().toISOString().split('T')[0], attendanceStatus: 'present', workMode: 'office', notes: '' });
 
+  // Leave state
+  const [leaves, setLeaves]             = useState([]);
+  const [leaveForm, setLeaveForm]       = useState({ startDate: '', endDate: '', type: 'casual', reason: '' });
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [autoAbsentLoading, setAutoAbsentLoading] = useState(false);
+
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -85,9 +92,10 @@ export default function AttendancePage() {
     }
   }, []);
 
-  // Load attendance history when tab changes
+  // Load attendance history / leaves when tab changes
   useEffect(() => {
     if (activeTab === 'history') loadHistory();
+    if (activeTab === 'leaves') loadLeaves();
   }, [activeTab]);
 
   const loadTodayRecord = async () => {
@@ -149,6 +157,52 @@ export default function AttendancePage() {
       const { data } = await api.get('/auth/users');
       setEmployees(data.data || []);
     } catch (err) { console.error(err); }
+  };
+
+  const loadLeaves = async () => {
+    setLeaveLoading(true);
+    try {
+      const { data } = await api.get('/attendance/leave');
+      setLeaves(data.data || []);
+    } catch (err) { console.error(err); }
+    finally { setLeaveLoading(false); }
+  };
+
+  const handleApplyLeave = async () => {
+    if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason.trim()) {
+      setError('Please fill all leave fields'); return;
+    }
+    setLeaveSubmitting(true);
+    try {
+      await api.post('/attendance/leave/apply', leaveForm);
+      setLeaveForm({ startDate: '', endDate: '', type: 'casual', reason: '' });
+      setSuccess('✅ Leave application submitted!');
+      setTimeout(() => setSuccess(''), 4000);
+      loadLeaves();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to apply leave');
+    } finally { setLeaveSubmitting(false); }
+  };
+
+  const handleLeaveStatus = async (id, status) => {
+    try {
+      await api.put(`/attendance/leave/${id}/status`, { status });
+      loadLeaves();
+    } catch (err) { setError('Failed to update leave status'); }
+  };
+
+  const handleAutoAbsent = async () => {
+    if (!window.confirm('Auto-mark all employees who have NOT checked in today as Absent?')) return;
+    setAutoAbsentLoading(true);
+    try {
+      const { data } = await api.post('/attendance/auto-absent', {});
+      setSuccess(`✅ ${data.message}`);
+      setTimeout(() => setSuccess(''), 5000);
+      loadAdminRecords();
+      loadAdminStats();
+    } catch (err) {
+      setError('Auto-absent failed');
+    } finally { setAutoAbsentLoading(false); }
   };
 
   /* ─── Camera (Face ID simulation) ─────────────────────────────────────── */
@@ -301,17 +355,19 @@ export default function AttendancePage() {
           <h1 className="page-title">Smart Attendance</h1>
           <p className="page-sub">Biometric · Geo-fence · Real-time tracking</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {isAdmin && <button className="btn btn-secondary btn-sm" onClick={() => { setManualModal(true); loadEmployees(); }}>✏️ Manual Mark</button>}
+          {isAdmin && <button className="btn btn-danger btn-sm" onClick={handleAutoAbsent} disabled={autoAbsentLoading}>{autoAbsentLoading ? '⟳ Marking…' : '🔴 Auto-Absent Today'}</button>}
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'var(--color-bg-secondary)', padding: '4px', borderRadius: '12px', width: 'fit-content' }}>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', background: 'var(--color-bg-secondary)', padding: '4px', borderRadius: '12px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', flexWrap: 'nowrap' }}>
         {[
           ...(isAdmin ? [{ key: 'admin', label: '📊 Dashboard' }] : []),
           { key: 'checkin', label: '🕐 Check In/Out' },
           { key: 'history', label: '📋 My History' },
+          { key: 'leaves',  label: '📅 Leave Management' },
         ].map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             style={{
@@ -344,7 +400,7 @@ export default function AttendancePage() {
         <div>
           {/* Today Stats */}
           {adminStats && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '20px' }}>
               {[
                 { label: 'Present Today', value: adminStats.today.present, icon: '✅', color: '#059669', bg: '#ECFDF5' },
                 { label: 'Absent', value: adminStats.today.absent, icon: '❌', color: '#DC2626', bg: '#FEF2F2' },
@@ -442,12 +498,20 @@ export default function AttendancePage() {
               )}
             </div>
           </div>
+          {/* Auto-absent button row */}
+          {isAdmin && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button className="btn btn-danger btn-sm" onClick={handleAutoAbsent} disabled={autoAbsentLoading}>
+                {autoAbsentLoading ? '⟳ Running…' : '🔴 Run Auto-Absent for Today'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── CHECK IN/OUT TAB ── */}
       {activeTab === 'checkin' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: '20px' }}>
+        <div className="emp-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, min(400px, 100%)) 1fr', gap: '20px' }}>
           {/* Left: Check-in Panel */}
           <div>
             {/* Clock */}
@@ -751,11 +815,123 @@ export default function AttendancePage() {
       )}
 
       {/* ── HISTORY TAB ── */}
+      {/* ── LEAVE MANAGEMENT TAB ── */}
+      {activeTab === 'leaves' && (
+        <div>
+          {/* Apply Leave Form (employees) */}
+          {!isAdmin && (
+            <div className="card" style={{ marginBottom: '20px', maxWidth: '600px' }}>
+              <div className="card-title">📅 Apply for Leave</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">From Date *</label>
+                  <input type="date" className="form-input" value={leaveForm.startDate}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={e => setLeaveForm(f => ({ ...f, startDate: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">To Date *</label>
+                  <input type="date" className="form-input" value={leaveForm.endDate}
+                    min={leaveForm.startDate || new Date().toISOString().split('T')[0]}
+                    onChange={e => setLeaveForm(f => ({ ...f, endDate: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Leave Type</label>
+                  <select className="form-select" value={leaveForm.type} onChange={e => setLeaveForm(f => ({ ...f, type: e.target.value }))}>
+                    <option value="casual">🏖️ Casual Leave</option>
+                    <option value="sick">🤒 Sick Leave</option>
+                    <option value="earned">💼 Earned Leave</option>
+                    <option value="unpaid">🔴 Unpaid Leave</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginTop: '12px' }}>
+                <label className="form-label">Reason *</label>
+                <textarea className="form-textarea" rows={3} placeholder="Brief reason for leave…"
+                  value={leaveForm.reason} onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '14px', alignItems: 'center' }}>
+                <button className="btn btn-primary" onClick={handleApplyLeave} disabled={leaveSubmitting}>
+                  {leaveSubmitting ? '⟳ Submitting…' : '📤 Submit Leave Application'}
+                </button>
+                {leaveForm.startDate && leaveForm.endDate && (
+                  <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                    {Math.max(1, Math.round((new Date(leaveForm.endDate) - new Date(leaveForm.startDate)) / 86400000) + 1)} day(s)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Leaves Table */}
+          <div className="table-card">
+            <div className="table-toolbar">
+              <div className="card-title" style={{ margin: 0 }}>
+                {isAdmin ? '📋 All Leave Requests' : '📋 My Leave Requests'}
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={loadLeaves}>↻ Refresh</button>
+            </div>
+            <div className="table-wrap">
+              {leaveLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-muted)' }}>Loading…</div>
+              ) : leaves.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>📅</div>
+                  <div>No leave requests found</div>
+                </div>
+              ) : (
+                <table className="ds-table">
+                  <thead><tr>
+                    {isAdmin && <th>Employee</th>}
+                    <th>From</th><th>To</th><th>Days</th><th>Type</th><th>Reason</th><th>Status</th>
+                    {isAdmin && <th>Actions</th>}
+                  </tr></thead>
+                  <tbody>
+                    {leaves.map(l => (
+                      <tr key={l._id}>
+                        {isAdmin && <td><strong>{l.employeeName}</strong></td>}
+                        <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{l.startDate}</span></td>
+                        <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{l.endDate}</span></td>
+                        <td style={{ fontWeight: 700 }}>{l.days}d</td>
+                        <td><span style={{ fontSize: '12px' }}>{l.type === 'casual' ? '🏖️ Casual' : l.type === 'sick' ? '🤒 Sick' : l.type === 'earned' ? '💼 Earned' : '🔴 Unpaid'}</span></td>
+                        <td style={{ maxWidth: '200px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>{l.reason}</td>
+                        <td>
+                          <span className={`badge ${
+                            l.status === 'approved' ? 'badge-confirmed' :
+                            l.status === 'rejected' ? 'badge-danger' : 'badge-warning'
+                          }`}>
+                            {l.status === 'approved' ? '✓ Approved' : l.status === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
+                          </span>
+                        </td>
+                        {isAdmin && (
+                          <td>
+                            {l.status === 'pending' ? (
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button className="btn btn-xs" style={{ background: '#059669', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}
+                                  onClick={() => handleLeaveStatus(l._id, 'approved')}>✓ Approve</button>
+                                <button className="btn btn-xs" style={{ background: '#DC2626', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}
+                                  onClick={() => handleLeaveStatus(l._id, 'rejected')}>✗ Reject</button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>—</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'history' && (
         <div>
           {/* Stats */}
           {historyStats && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '16px' }}>
               {[
                 { label: 'Days Present', value: historyStats.presentDays, icon: '✅', color: '#059669' },
                 { label: 'Absent', value: historyStats.absentDays, icon: '❌', color: '#DC2626' },

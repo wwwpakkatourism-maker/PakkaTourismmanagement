@@ -23,6 +23,7 @@ import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
 import WhatsappAutomation from './pages/whatsapp/WhatsappAutomation';
 import ExcelExport from './pages/exports/ExcelExport';
 import SettingsPage from './pages/settings/SettingsPage';
+import ProfilePage from './pages/profile/ProfilePage';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -90,6 +91,8 @@ export default function App() {
 
           {/* HRMS */}
           <Route path="attendance"   element={<AttendancePage />} />
+          <Route path="profile"      element={<ProfilePage />} />
+          <Route path="profile/:id"  element={<ProfilePage />} />
 
           {/* CRM */}
           <Route path="leads"        element={<LeadPipeline />} />
