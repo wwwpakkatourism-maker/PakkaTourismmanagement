@@ -909,7 +909,7 @@ export default function ItineraryBuilder() {
           <h1 className="page-title">Itinerary Builder</h1>
           <p className="page-sub">Premium day-wise planner with cover image & PDF export</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }} className="itinerary-desktop-actions">
           <button className="btn btn-secondary btn-sm" onClick={() => setShowPreview(p => !p)}>
             {showPreview ? '✏️ Edit' : '👁 Preview'}
           </button>
@@ -997,12 +997,67 @@ export default function ItineraryBuilder() {
             : <span style={{ color: '#F59E0B', fontWeight: 600 }}>⚠️ No company logo — upload one in Admin → Settings → Company Logo</span>
           }
         </div>
-      )}
+      {/* Mobile tab switcher — visible only on small screens */}
+      <style>{`
+        @media (max-width: 768px) {
+          .itinerary-mobile-tabs { display: flex !important; }
+          .itinerary-desktop-actions { display: none !important; }
+          .itinerary-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (min-width: 769px) {
+          .itinerary-mobile-tabs { display: none !important; }
+        }
+      `}</style>
+      <div style={{ display: 'none', gap: 0, borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--color-border)', marginBottom: '14px' }} className="itinerary-mobile-tabs">
+        <button
+          onClick={() => setShowPreview(false)}
+          style={{ flex: 1, padding: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', transition: 'all 0.15s', background: !showPreview ? 'var(--color-accent, #2563EB)' : 'var(--color-bg-surface)', color: !showPreview ? '#fff' : 'var(--color-text-muted)' }}
+        >✏️ Edit</button>
+        <button
+          onClick={() => setShowPreview(true)}
+          style={{ flex: 1, padding: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', transition: 'all 0.15s', background: showPreview ? 'var(--color-accent, #2563EB)' : 'var(--color-bg-surface)', color: showPreview ? '#fff' : 'var(--color-text-muted)' }}
+        >👁 Preview</button>
+        <div style={{ display: 'flex', gap: '4px', padding: '4px' }}>
+          <button onClick={() => setShowExportMenu(p => !p)} disabled={exporting} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg,#1e40af,#3b82f6)', color: '#fff', fontWeight: 700, fontSize: '12px' }}>
+            {exporting ? '...' : '⬇️'}
+          </button>
+          <button onClick={handleWhatsAppShare} style={{ padding: '6px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#25D366', color: '#fff', fontSize: '12px', fontWeight: 700 }}>WA</button>
+        </div>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: '20px' }}>
+        <style>{`
+          @media (max-width: 768px) {
+            .itinerary-grid {
+              grid-template-columns: 1fr !important;
+            }
+            /* On mobile: Edit tab = show Left panel, hide Right */
+            .itinerary-left-panel.mobile-hidden  { display: none !important; }
+            /* On mobile: Preview tab = show Right panel, hide Left */
+            .itinerary-right-panel.mobile-hidden { display: none !important; }
+            /* Prevent overflow from fixed-width elements */
+            .activity-row-grid { grid-template-columns: 1fr !important; }
+            .page-content { overflow-x: hidden; }
+            .card { overflow: hidden; word-break: break-word; }
+            input, select, textarea { max-width: 100% !important; box-sizing: border-box; }
+          }
+          @media (min-width: 769px) {
+            /* Desktop: always show both panels regardless of mobile-hidden class */
+            .itinerary-left-panel.mobile-hidden,
+            .itinerary-right-panel.mobile-hidden {
+              display: flex !important;
+            }
+            .itinerary-right-panel.mobile-hidden {
+              display: block !important;
+            }
+          }
+        `}</style>
 
-        {/* ══ LEFT PANEL ══════════════════════════════════════════════════════ */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+        {/* ══ LEFT PANEL (Trip setup, days, inclusions) ══════════════ */}
+        <div
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}
+          className={`itinerary-left-panel${showPreview ? ' mobile-hidden' : ''}`}
+        >
 
           {/* Cover Image */}
           <div className="card">
@@ -1083,8 +1138,15 @@ export default function ItineraryBuilder() {
           </div>
         </div>
 
-        {/* ══ RIGHT PANEL ═════════════════════════════════════════════════════ */}
-        <div>
+        {/* ══ RIGHT PANEL (Day planner, preview) ═════════════════ */}
+        <div
+          style={{ minWidth: 0, overflow: 'hidden' }}
+          className={`itinerary-right-panel${!showPreview ? ' mobile-hidden' : ''}`}
+        >
+          {/* Show right panel always on desktop; on mobile only when preview=true */}
+          <div style={{ display: 'block' }}>
+          {/* OVERRIDE: always show right panel — hide via CSS only */}
+          </div>
           {!showPreview ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
@@ -1092,9 +1154,9 @@ export default function ItineraryBuilder() {
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
                   <div className="card-title" style={{ marginBottom: 0 }}>📅 Day {activeDay}</div>
-                  <input className="form-input" style={{ width: '200px' }} placeholder="Day title…" value={day?.title || ''} onChange={e => updateDay('title', e.target.value)} />
+                  <input className="form-input" style={{ width: '100%', maxWidth: '200px' }} placeholder="Day title…" value={day?.title || ''} onChange={e => updateDay('title', e.target.value)} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '14px' }} className="activity-row-grid">
                   <div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={day?.date || ''} onChange={e => updateDay('date', e.target.value)} /></div>
                   <div className="form-group"><label className="form-label">Accommodation</label><input className="form-input" value={day?.accommodation || ''} onChange={e => updateDay('accommodation', e.target.value)} /></div>
                   <div className="form-group"><label className="form-label">Transport</label><input className="form-input" value={day?.transport || ''} onChange={e => updateDay('transport', e.target.value)} /></div>
@@ -1137,7 +1199,7 @@ export default function ItineraryBuilder() {
                         </div>
                         <button className="btn btn-ghost btn-xs" style={{ color: 'var(--color-danger)' }} onClick={() => { const a = day.activities.filter((_, j) => j !== i); updateDay('activities', a); }}>✕ Remove</button>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginBottom: '8px' }} className="activity-row-grid">
                         <div className="form-group"><label className="form-label">Time</label><input className="form-input" placeholder="09:00" value={act.time} onChange={e => { const a = [...day.activities]; a[i] = { ...a[i], time: e.target.value }; updateDay('activities', a); }} /></div>
                         <div className="form-group"><label className="form-label">Activity *</label><input className="form-input" placeholder="Activity name" value={act.activity} onChange={e => { const a = [...day.activities]; a[i] = { ...a[i], activity: e.target.value }; updateDay('activities', a); }} /></div>
                         <div className="form-group"><label className="form-label">Duration</label><input className="form-input" placeholder="2h" value={act.duration} onChange={e => { const a = [...day.activities]; a[i] = { ...a[i], duration: e.target.value }; updateDay('activities', a); }} /></div>
