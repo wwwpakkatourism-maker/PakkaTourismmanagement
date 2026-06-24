@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType } from 'docx';
 import { saveAs } from 'file-saver';
@@ -937,44 +937,7 @@ export default function ItineraryBuilder() {
               )}
             </button>
 
-            {showExportMenu && !exporting && (
-              <>
-                <div style={{ position: 'fixed', inset: 0, zIndex: 998 }} onClick={() => setShowExportMenu(false)} />
-                <div style={{
-                  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                  background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
-                  borderRadius: '16px', boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
-                  zIndex: 999, minWidth: '240px', padding: '8px', overflow: 'hidden',
-                }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '6px 12px 4px' }}>Choose Format</div>
-                  {[
-                    { fmt: 'pdf',   icon: '📄', label: 'Export as PDF',           sub: 'Premium A4 with cover page',    color: '#2563EB', bg: '#EFF6FF' },
-                    { fmt: 'docx',  icon: '📝', label: 'Export as Word (.docx)',   sub: 'Editable in Microsoft Word',    color: '#0078D4', bg: '#E9F5FF' },
-                    { fmt: 'image', icon: '🖼️', label: 'Export as Image (.png)',   sub: 'High-res PNG, 3x quality',     color: '#7C3AED', bg: '#F5F3FF' },
-                  ].map(opt => (
-                    <button key={opt.fmt}
-                      onClick={() => handleExport(opt.fmt)}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: '12px',
-                        padding: '10px 12px', borderRadius: '12px', border: 'none',
-                        background: 'transparent', cursor: 'pointer', textAlign: 'left',
-                        transition: 'background 0.12s',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--color-bg-secondary)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <div style={{ width: 38, height: 38, borderRadius: '10px', flexShrink: 0, background: opt.bg, display: 'grid', placeItems: 'center', fontSize: '20px' }}>
-                        {opt.icon}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{opt.label}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '1px' }}>{opt.sub}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            {/* Export menu has been moved to a global modal at the end of the component */}
           </div>
 
           <button onClick={handleWhatsAppShare}
@@ -1320,6 +1283,51 @@ export default function ItineraryBuilder() {
           )}
         </div>
       </div>
+
+      {/* ── Global Export Menu Modal ── */}
+      {showExportMenu && !exporting && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setShowExportMenu(false)} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
+            borderRadius: '20px', boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
+            zIndex: 9999, width: '90%', maxWidth: '340px', padding: '20px', overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-text-primary)' }}>Export Itinerary</div>
+              <button onClick={() => setShowExportMenu(false)} style={{ background: 'transparent', border: 'none', fontSize: '16px', cursor: 'pointer', color: 'var(--color-text-muted)' }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {[
+              { fmt: 'pdf',   icon: '📄', label: 'Export as PDF',           sub: 'Premium A4 with cover page',    color: '#2563EB', bg: '#EFF6FF' },
+              { fmt: 'docx',  icon: '📝', label: 'Export as Word (.docx)',   sub: 'Editable in Microsoft Word',    color: '#0078D4', bg: '#E9F5FF' },
+              { fmt: 'image', icon: '🖼️', label: 'Export as Image (.png)',   sub: 'High-res PNG, 3x quality',     color: '#7C3AED', bg: '#F5F3FF' },
+            ].map(opt => (
+              <button key={opt.fmt}
+                onClick={() => handleExport(opt.fmt)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '14px',
+                  padding: '14px', borderRadius: '14px', border: '1.5px solid var(--color-border)',
+                  background: 'var(--color-bg-surface)', cursor: 'pointer', textAlign: 'left',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-secondary)'; e.currentTarget.style.borderColor = opt.color; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-bg-surface)'; e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+              >
+                <div style={{ width: 46, height: 46, borderRadius: '12px', flexShrink: 0, background: opt.bg, display: 'grid', placeItems: 'center', fontSize: '24px' }}>
+                  {opt.icon}
+                </div>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{opt.label}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{opt.sub}</div>
+                </div>
+              </button>
+            ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

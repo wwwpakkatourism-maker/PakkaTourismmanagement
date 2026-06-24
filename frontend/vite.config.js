@@ -16,9 +16,6 @@ export default defineConfig(({ mode }) => ({
   ],
 
   // Suppress sourcemap warnings from third-party libs (e.g. face-api.js)
-  build: {
-    sourcemapIgnoreList: (sourcePath) => sourcePath.includes('node_modules'),
-  },
 
 
   // ── Base URL ──────────────────────────────────────────────────────────────
@@ -39,6 +36,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir:          'dist',
     sourcemap:       false,        // No sourcemaps in production — saves ~30% size
+    sourcemapIgnoreList: (sourcePath) => sourcePath.includes('node_modules'), // Suppress 3rd party warnings
     minify:          'esbuild',    // Fastest minifier
     target:          'es2020',
     cssMinify:       true,
