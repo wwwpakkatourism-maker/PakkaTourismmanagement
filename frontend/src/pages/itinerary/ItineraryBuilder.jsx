@@ -1027,6 +1027,12 @@ export default function ItineraryBuilder() {
         </div>
       </div>
 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 320px) 1fr',
+        gap: '20px',
+      }} className="itinerary-grid">
+
         <style>{`
           @media (max-width: 768px) {
             .itinerary-grid {
