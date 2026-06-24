@@ -12,7 +12,8 @@
 
 import { create } from 'zustand';
 
-const API_BASE = import.meta.env.VITE_API_URL
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const HOST_BASE = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
   : '';
 
@@ -20,7 +21,7 @@ const API_BASE = import.meta.env.VITE_API_URL
 export function resolveLogoUrl(logoPath) {
   if (!logoPath) return null;
   if (logoPath.startsWith('http') || logoPath.startsWith('data:')) return logoPath;
-  return `${API_BASE}${logoPath.startsWith('/') ? '' : '/'}${logoPath}`;
+  return `${HOST_BASE}${logoPath.startsWith('/') ? '' : '/'}${logoPath}`;
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ const useCompanyStore = create((set, get) => ({
 
       if (token) {
         // Authenticated: fetch full company settings
-        const res = await fetch('/api/settings/company', {
+        const res = await fetch(`${API_BASE}/settings/company`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -54,7 +55,7 @@ const useCompanyStore = create((set, get) => ({
 
       if (!company) {
         // Not authenticated or full fetch failed: use public branding endpoint
-        const res = await fetch('/api/settings/public-branding');
+        const res = await fetch(`${API_BASE}/settings/public-branding`);
         if (res.ok) {
           const data = await res.json();
           company = data.data || null;
