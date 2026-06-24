@@ -27,7 +27,7 @@ export const setNavigateFn = (fn) => { navigateFn = fn; };
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
 const api = axios.create({
-  baseURL:         '/api',
+  baseURL:         import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,    // ← Sends HttpOnly cookies automatically
   headers:         { 'Content-Type': 'application/json' },
   timeout:         30_000,
