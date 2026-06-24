@@ -52,13 +52,15 @@ router.post('/upload-logo', protect, adminOnly, (req, res) => {
     if (err) return res.status(400).json({ success: false, message: err.message });
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
-    const logoUrl = `/uploads/company/${req.file.filename}`;
+    // Cloudinary returns the CDN URL in req.file.path
+    const logoUrl = req.file.path;
     try {
       const settings = await CompanySettings.getSettings();
       settings.companyLogo = logoUrl;
       await settings.save();
       res.json({ success: true, url: logoUrl, data: settings });
     } catch (e) {
+      console.error('[Settings] Logo save error:', e.message);
       res.status(500).json({ success: false, message: e.message });
     }
   });

@@ -1,33 +1,14 @@
 const router  = require('express').Router();
-const multer  = require('multer');
 const path    = require('path');
-const fs      = require('fs');
 const { protect, adminOnly } = require('../middleware/authMiddleware');
 const User    = require('../models/User');
+const {
+  uploadAvatar,
+  uploadDocument,
+  uploadCompanyLogo,
+  deleteFile,
+} = require('../middleware/uploadMiddleware');
 
-// ─── Multer config ────────────────────────────────────────────────────────────
-const ensureDir = (dir) => { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); };
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const subDir = file.fieldname === 'avatar' ? 'avatars'
-                 : file.fieldname === 'logo'   ? 'company'
-                 : 'documents';
-    const uploadPath = path.join(__dirname, '..', 'uploads', subDir);
-    ensureDir(uploadPath);
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-    const ext = path.extname(file.originalname);
-    cb(null, `${unique}${ext}`);
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-  const allowed = /jpeg|jpg|png|gif|webp|pdf|doc|docx/;
-  const ext  = allowed.test(path.extname(file.originalname).toLowerCase());
-  const mime = allowed.test(file.mimetype);
   if (ext && mime) cb(null, true);
   else cb(new Error('Only images (JPEG/PNG/WebP) and documents (PDF/DOC) are allowed'));
 };
@@ -60,22 +41,22 @@ router.put('/me', protect, async (req, res, next) => {
 });
 
 // ─── POST /api/profile/avatar — upload own profile photo ──────────────────────
-router.post('/avatar', protect, upload.single('avatar'), async (req, res, next) => {
+router.post('/avatar', protect, uploadAvatar, async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-    const url = `/uploads/avatars/${req.file.filename}`;
+    const url = req.file.path; // Cloudinary CDN URL
     const user = await User.findByIdAndUpdate(req.user._id, { profilePhoto: url }, { new: true }).select('-password');
     res.json({ success: true, data: user, url });
   } catch (err) { next(err); }
 });
 
 // ─── POST /api/profile/document — upload aadhaar/certificate ──────────────────
-router.post('/document', protect, upload.single('document'), async (req, res, next) => {
+router.post('/document', protect, uploadDocument, async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
     const docType = req.body.docType || 'other';
     const docName = req.body.docName || req.file.originalname;
-    const url = `/uploads/documents/${req.file.filename}`;
+    const url = req.file.path; // Cloudinary CDN URL
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -94,9 +75,8 @@ router.delete('/document/:docId', protect, async (req, res, next) => {
     const doc = user.documents.id(req.params.docId);
     if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
 
-    // Remove file from disk
-    const filePath = path.join(__dirname, '..', doc.url);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Delete from Cloudinary
+    await deleteFile(doc.url, 'raw');
 
     doc.deleteOne();
     await user.save();
@@ -127,22 +107,22 @@ router.put('/:id', protect, adminOnly, async (req, res, next) => {
 });
 
 // ─── ADMIN: POST /api/profile/:id/avatar — upload employee photo ──────────────
-router.post('/:id/avatar', protect, adminOnly, upload.single('avatar'), async (req, res, next) => {
+router.post('/:id/avatar', protect, adminOnly, uploadAvatar, async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-    const url = `/uploads/avatars/${req.file.filename}`;
+    const url = req.file.path; // Cloudinary CDN URL
     const user = await User.findByIdAndUpdate(req.params.id, { profilePhoto: url }, { new: true }).select('-password');
     res.json({ success: true, data: user, url });
   } catch (err) { next(err); }
 });
 
 // ─── ADMIN: POST /api/profile/:id/document — upload employee docs ─────────────
-router.post('/:id/document', protect, adminOnly, upload.single('document'), async (req, res, next) => {
+router.post('/:id/document', protect, adminOnly, uploadDocument, async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
     const docType = req.body.docType || 'other';
     const docName = req.body.docName || req.file.originalname;
-    const url = `/uploads/documents/${req.file.filename}`;
+    const url = req.file.path; // Cloudinary CDN URL
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -162,8 +142,8 @@ router.delete('/:id/document/:docId', protect, adminOnly, async (req, res, next)
     const doc = user.documents.id(req.params.docId);
     if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
 
-    const filePath = path.join(__dirname, '..', doc.url);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Delete from Cloudinary
+    await deleteFile(doc.url, 'raw');
 
     doc.deleteOne();
     await user.save();
@@ -172,11 +152,10 @@ router.delete('/:id/document/:docId', protect, adminOnly, async (req, res, next)
 });
 
 // ─── Company Logo Upload ──────────────────────────────────────────────────────
-router.post('/company-logo', protect, adminOnly, upload.single('logo'), async (req, res, next) => {
+router.post('/company-logo', protect, adminOnly, uploadCompanyLogo, async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-    const url = `/uploads/company/${req.file.filename}`;
-    // Store on admin user for now (can move to Settings model later)
+    const url = req.file.path; // Cloudinary CDN URL
     await User.findByIdAndUpdate(req.user._id, { 'companyLogo': url });
     res.json({ success: true, url });
   } catch (err) { next(err); }

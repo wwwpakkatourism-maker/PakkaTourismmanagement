@@ -61,7 +61,7 @@ router.post('/upload-image', protect, withUpload(uploadItineraryImage), (req, re
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
-  const url = `/uploads/itinerary/${req.file.filename}`;
+  const url = req.file.path; // Cloudinary CDN URL
   res.status(201).json({ success: true, url, type: 'image', filename: req.file.filename });
 });
 
@@ -74,7 +74,7 @@ router.post('/upload-video', protect, withUpload(uploadItineraryVideo), (req, re
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
-  const url = `/uploads/itinerary/${req.file.filename}`;
+  const url = req.file.path; // Cloudinary CDN URL
   res.status(201).json({
     success:  true,
     url,
@@ -95,7 +95,7 @@ router.post('/upload-media', protect, withUpload(uploadItineraryMedia), (req, re
   }
 
   const files = req.files.map(file => ({
-    url:      `/uploads/itinerary/${file.filename}`,
+    url:      file.path, // Cloudinary CDN URL
     type:     file.mimetype.startsWith('video/') ? 'video' : 'image',
     filename: file.filename,
     size:     file.size,

@@ -1,48 +1,39 @@
 /**
- * uploadMiddleware.js — Production-grade Multer configuration
+ * uploadMiddleware.js — Cloudinary-based upload middleware
  * ══════════════════════════════════════════════════════════════════════════
  *
- * Supported upload types:
+ * All files are uploaded directly to Cloudinary CDN.
+ * No local disk storage — safe for serverless/cloud deployments (Render, Vercel).
+ *
+ * Upload types:
  *  • Images  — jpg, jpeg, png, webp, gif, svg (max 10 MB)
  *  • Videos  — mp4, mov, webm, avi, mkv       (max 200 MB)
  *  • Docs    — pdf, doc, docx, xls, xlsx      (max 20 MB)
  *
- * Folder structure:
- *  uploads/
- *    images/      ← profile photos, logos, itinerary images
- *    videos/      ← tour preview videos, activity clips
- *    documents/   ← employee docs, contracts
- *    company/     ← company logo (kept separate for quick lookup)
- *    itinerary/   ← itinerary-specific media (images + videos)
+ * Cloudinary folders:
+ *  pakka-tourism/
  *    avatars/     ← employee profile photos
- *
- * Security:
- *  • Double validation: file extension + MIME type both checked
- *  • Random filename prevents path traversal & enumeration
- *  • Size limits enforced per-upload-type
+ *    company/     ← company logo
+ *    itinerary/   ← itinerary images & videos
+ *    images/      ← general images
+ *    videos/      ← general videos
+ *    documents/   ← employee docs, contracts
  * ══════════════════════════════════════════════════════════════════════════
  */
 
-const multer = require('multer');
-const path   = require('path');
-const fs     = require('fs');
+const multer                              = require('multer');
+const { CloudinaryStorage }               = require('multer-storage-cloudinary');
+const cloudinary                          = require('../config/cloudinary');
 
-// ── Ensure upload folder exists ──────────────────────────────────────────────
-const ensureDir = (dir) => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-};
-
-// ── MIME type maps ────────────────────────────────────────────────────────────
+// ── MIME type sets for validation ─────────────────────────────────────────────
 const IMAGE_MIMES = new Set([
   'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
   'image/gif',  'image/svg+xml',
 ]);
-
 const VIDEO_MIMES = new Set([
   'video/mp4', 'video/quicktime', 'video/webm',
   'video/x-msvideo', 'video/x-matroska', 'video/avi',
 ]);
-
 const DOC_MIMES = new Set([
   'application/pdf',
   'application/msword',
@@ -55,25 +46,13 @@ const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg']);
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv']);
 const DOC_EXTS   = new Set(['.pdf', '.doc', '.docx', '.xls', '.xlsx']);
 
-// ── Storage factory ───────────────────────────────────────────────────────────
-const makeStorage = (subfolder) =>
-  multer.diskStorage({
-    destination: (req, file, cb) => {
-      const dir = path.join(__dirname, '..', 'uploads', subfolder);
-      ensureDir(dir);
-      cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-      const ext  = path.extname(file.originalname).toLowerCase();
-      const name = `${subfolder}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-      cb(null, name);
-    },
-  });
+// ── File extension helper ──────────────────────────────────────────────────────
+const path = require('path');
+const getExt = (filename) => path.extname(filename || '').toLowerCase();
 
 // ── File filters ──────────────────────────────────────────────────────────────
-
 const imageFilter = (req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
+  const ext = getExt(file.originalname);
   if (IMAGE_EXTS.has(ext) && IMAGE_MIMES.has(file.mimetype)) {
     cb(null, true);
   } else {
@@ -83,7 +62,7 @@ const imageFilter = (req, file, cb) => {
 };
 
 const videoFilter = (req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
+  const ext = getExt(file.originalname);
   if (VIDEO_EXTS.has(ext) && VIDEO_MIMES.has(file.mimetype)) {
     cb(null, true);
   } else {
@@ -93,7 +72,7 @@ const videoFilter = (req, file, cb) => {
 };
 
 const docFilter = (req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
+  const ext = getExt(file.originalname);
   if (DOC_EXTS.has(ext) && DOC_MIMES.has(file.mimetype)) {
     cb(null, true);
   } else {
@@ -102,12 +81,10 @@ const docFilter = (req, file, cb) => {
   }
 };
 
-// ── Media filter: images OR videos ───────────────────────────────────────────
 const mediaFilter = (req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (IMAGE_EXTS.has(ext) && IMAGE_MIMES.has(file.mimetype)) {
-    cb(null, true);
-  } else if (VIDEO_EXTS.has(ext) && VIDEO_MIMES.has(file.mimetype)) {
+  const ext = getExt(file.originalname);
+  if ((IMAGE_EXTS.has(ext) && IMAGE_MIMES.has(file.mimetype)) ||
+      (VIDEO_EXTS.has(ext) && VIDEO_MIMES.has(file.mimetype))) {
     cb(null, true);
   } else {
     cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE',
@@ -115,60 +92,89 @@ const mediaFilter = (req, file, cb) => {
   }
 };
 
+// ── Cloudinary Storage factory ────────────────────────────────────────────────
+// `resourceType` = 'image' | 'video' | 'raw' (auto works for images/videos)
+const makeCloudinaryStorage = (folder, resourceType = 'auto', transformations = []) =>
+  new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => {
+      const ext           = getExt(file.originalname);
+      const publicId      = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+      const isVideo       = VIDEO_EXTS.has(ext);
+      const finalResource = resourceType === 'auto'
+        ? (isVideo ? 'video' : 'image')
+        : resourceType;
+
+      return {
+        folder:          `pakka-tourism/${folder}`,
+        public_id:       publicId,
+        resource_type:   finalResource,
+        // For images: auto quality + format optimization
+        ...(finalResource === 'image' && {
+          transformation: [
+            { quality: 'auto:good' },
+            { fetch_format: 'auto' },
+            ...transformations,
+          ],
+        }),
+      };
+    },
+  });
+
 // ── Uploader instances ────────────────────────────────────────────────────────
 
-// Company logo — images only, 5 MB
+// Company logo — images only, 5 MB (auto-optimize quality)
 const uploadCompanyLogo = multer({
-  storage:    makeStorage('company'),
+  storage:    makeCloudinaryStorage('company', 'image', [{ width: 400, crop: 'limit' }]),
   fileFilter: imageFilter,
   limits:     { fileSize: 5 * 1024 * 1024 },
 }).single('logo');
 
-// Profile avatar — images only, 3 MB
+// Profile avatar — images only, 3 MB (resize to max 300px)
 const uploadAvatar = multer({
-  storage:    makeStorage('avatars'),
+  storage:    makeCloudinaryStorage('avatars', 'image', [{ width: 300, height: 300, crop: 'fill', gravity: 'face' }]),
   fileFilter: imageFilter,
   limits:     { fileSize: 3 * 1024 * 1024 },
 }).single('avatar');
 
-// Itinerary image — images only, 10 MB (cover photos, day photos)
+// Itinerary image — images only, 10 MB
 const uploadItineraryImage = multer({
-  storage:    makeStorage('itinerary'),
+  storage:    makeCloudinaryStorage('itinerary', 'image', [{ width: 1200, crop: 'limit' }]),
   fileFilter: imageFilter,
   limits:     { fileSize: 10 * 1024 * 1024 },
 }).single('image');
 
-// Itinerary VIDEO — videos only, 200 MB (tour preview clips)
+// Itinerary VIDEO — videos only, 200 MB
 const uploadItineraryVideo = multer({
-  storage:    makeStorage('itinerary'),
+  storage:    makeCloudinaryStorage('itinerary', 'video'),
   fileFilter: videoFilter,
   limits:     { fileSize: 200 * 1024 * 1024 },
 }).single('video');
 
 // Itinerary MEDIA — images OR videos, multi-file up to 5 files
 const uploadItineraryMedia = multer({
-  storage:    makeStorage('itinerary'),
+  storage:    makeCloudinaryStorage('itinerary', 'auto'),
   fileFilter: mediaFilter,
   limits:     { fileSize: 200 * 1024 * 1024, files: 5 },
 }).array('media', 5);
 
 // General image upload — images only, 10 MB
 const uploadImage = multer({
-  storage:    makeStorage('images'),
+  storage:    makeCloudinaryStorage('images', 'image'),
   fileFilter: imageFilter,
   limits:     { fileSize: 10 * 1024 * 1024 },
 }).single('image');
 
 // General video upload — videos only, 200 MB
 const uploadVideo = multer({
-  storage:    makeStorage('videos'),
+  storage:    makeCloudinaryStorage('videos', 'video'),
   fileFilter: videoFilter,
   limits:     { fileSize: 200 * 1024 * 1024 },
 }).single('video');
 
 // Document upload — docs only, 20 MB
 const uploadDocument = multer({
-  storage:    makeStorage('documents'),
+  storage:    makeCloudinaryStorage('documents', 'raw'),
   fileFilter: docFilter,
   limits:     { fileSize: 20 * 1024 * 1024 },
 }).single('document');
@@ -178,7 +184,6 @@ const runUpload = (uploader) => (req, res) =>
   new Promise((resolve, reject) => {
     uploader(req, res, (err) => {
       if (err instanceof multer.MulterError) {
-        // Multer-specific errors: file size, unexpected field, etc.
         reject(Object.assign(err, { statusCode: 400 }));
       } else if (err) {
         reject(err);
@@ -188,11 +193,11 @@ const runUpload = (uploader) => (req, res) =>
     });
   });
 
-// ── Middleware error wrapper — use in Express route ───────────────────────────
-// Usage: router.post('/upload', withUpload(uploadItineraryImage), handler)
+// ── Middleware error wrapper ───────────────────────────────────────────────────
 const withUpload = (uploader) => (req, res, next) => {
   uploader(req, res, (err) => {
     if (err instanceof multer.MulterError) {
+      console.error(`[Upload Error] Multer: ${err.code} — ${err.message}`);
       return res.status(400).json({
         success: false,
         message: err.message || 'File upload error',
@@ -200,20 +205,38 @@ const withUpload = (uploader) => (req, res, next) => {
       });
     }
     if (err) {
+      console.error(`[Upload Error] ${err.message || err}`);
       return res.status(400).json({ success: false, message: err.message || 'Upload failed' });
     }
     next();
   });
 };
 
-// ── Helper: build public URL from uploaded file ───────────────────────────────
-const buildFileUrl = (subfolder, filename) => `/uploads/${subfolder}/${filename}`;
+// ── Helper: extract secure Cloudinary URL from uploaded file ─────────────────
+// After upload, req.file.path = Cloudinary secure_url
+const buildFileUrl = (file) => {
+  if (!file) return null;
+  // multer-storage-cloudinary sets file.path = secure_url
+  return file.path || file.secure_url || null;
+};
 
-// ── Helper: delete uploaded file from disk (e.g. on record delete) ───────────
-const deleteFile = (filePath) => {
-  const absPath = path.join(__dirname, '..', filePath);
-  if (fs.existsSync(absPath)) {
-    try { fs.unlinkSync(absPath); } catch (_) {}
+// ── Helper: delete file from Cloudinary ───────────────────────────────────────
+const deleteFile = async (publicIdOrUrl, resourceType = 'image') => {
+  if (!publicIdOrUrl) return;
+  try {
+    // If it's a full URL, extract the public_id
+    let publicId = publicIdOrUrl;
+    if (publicIdOrUrl.startsWith('http')) {
+      // Extract public_id from URL: ...pakka-tourism/avatars/123456.jpg → pakka-tourism/avatars/123456
+      const parts    = publicIdOrUrl.split('/');
+      const filename = parts[parts.length - 1].split('.')[0];
+      const folder   = parts.slice(-3, -1).join('/'); // e.g. pakka-tourism/avatars
+      publicId       = `${folder}/${filename}`;
+    }
+    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+    console.log(`[Cloudinary] Deleted: ${publicId}`);
+  } catch (err) {
+    console.warn(`[Cloudinary] Failed to delete ${publicIdOrUrl}: ${err.message}`);
   }
 };
 
