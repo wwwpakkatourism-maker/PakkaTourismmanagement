@@ -997,6 +997,8 @@ export default function ItineraryBuilder() {
             : <span style={{ color: '#F59E0B', fontWeight: 600 }}>⚠️ No company logo — upload one in Admin → Settings → Company Logo</span>
           }
         </div>
+      )}
+      
       {/* Mobile tab switcher — visible only on small screens */}
       <style>{`
         @media (max-width: 768px) {
