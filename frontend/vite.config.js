@@ -11,10 +11,15 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => ({
   plugins: [
     react({
-      // Babel fast-refresh + automatic JSX runtime
       fastRefresh: true,
     }),
   ],
+
+  // Suppress sourcemap warnings from third-party libs (e.g. face-api.js)
+  build: {
+    sourcemapIgnoreList: (sourcePath) => sourcePath.includes('node_modules'),
+  },
+
 
   // ── Base URL ──────────────────────────────────────────────────────────────
   // '/' for same-origin server deploy (Vercel)
