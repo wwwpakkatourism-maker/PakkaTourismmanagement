@@ -25,6 +25,8 @@
 
 import { create } from 'zustand';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
 // ─── LocalStorage key constants ───────────────────────────────────────────────
 export const LS_USER  = 'pt_user';
 export const LS_TOKEN = 'pt_token'; // Legacy fallback — token also in HttpOnly cookie
@@ -111,7 +113,7 @@ const useAuthStore = create((set, get) => ({
   login: async (credentials) => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method:      'POST',
         headers:     { 'Content-Type': 'application/json' },
         credentials: 'include',   // ← CRITICAL: accept Set-Cookie from backend
@@ -161,7 +163,7 @@ const useAuthStore = create((set, get) => ({
   logout: async () => {
     try {
       // Tell backend to revoke refresh token in DB + clear cookies
-      await fetch('/api/auth/logout', {
+      await fetch(`${API_BASE}/auth/logout`, {
         method:      'POST',
         credentials: 'include',
       });
@@ -183,7 +185,7 @@ const useAuthStore = create((set, get) => ({
   // ── logoutAll() — kill all sessions ─────────────────────────────────────
   logoutAll: async () => {
     try {
-      await fetch('/api/auth/logout-all', {
+      await fetch(`${API_BASE}/auth/logout-all`, {
         method:      'POST',
         credentials: 'include',
         headers:     { 'Content-Type': 'application/json' },
